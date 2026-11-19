@@ -216,6 +216,7 @@ function recordLive({ args, rawPath, seconds, minutes, canGoBack, onProgress, on
     // it, and fall back to counting the seconds during which the file is
     // actually growing - so progress only moves when real footage arrives.
     let ffmpegSec = 0;
+    let lastFfmpegSec = 0;
     let activeSec = 0;
     let lastBytes = 0;
     let lastAdvanceAt = Date.now();
@@ -247,7 +248,12 @@ function recordLive({ args, rawPath, seconds, minutes, canGoBack, onProgress, on
       try { bytes = fs.statSync(rawPath).size; } catch (_) {}
       const grew = bytes > lastBytes;
       if (grew) { lastBytes = bytes; activeSec += 1; }
-      if (grew || ffmpegSec > activeSec) lastAdvanceAt = Date.now();
+      // "Advanced" means real new footage since the last check: the file grew,
+      // or ffmpeg's reported time moved on. Comparing ffmpeg's time to its own
+      // previous value (not to activeSec) is what makes a stall actually detectable.
+      const ffmpegAdvanced = ffmpegSec > lastFfmpegSec;
+      if (ffmpegAdvanced) lastFfmpegSec = ffmpegSec;
+      if (grew || ffmpegAdvanced) lastAdvanceAt = Date.now();
 
       const recordedSec = Math.min(seconds, Math.max(ffmpegSec, activeSec));
       onProgress(Math.min(0.95, recordedSec / seconds));
