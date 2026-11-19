@@ -6,12 +6,15 @@ if (process.env.FFMPEG_PATH) ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH);
 if (process.env.FFPROBE_PATH) ffmpeg.setFfprobePath(process.env.FFPROBE_PATH);
 
 // ---- Settings you can tweak -------------------------------------------------
+// Vertical (9:16) canvas used by Fill, Fit and Face cam split.
 const OUT_W = 1080;
 const OUT_H = 1920;
+// Wide (16:9) canvas used by Original wide.
+const WIDE_W = 1920;
+const WIDE_H = 1080;
 
-// How much of the picture's width to keep. 1 = a square cut from the middle,
-// which fills a bit over half of the tall screen. 4/3 keeps more of the sides
-// (smaller picture); 4/5 zooms in further (bigger picture, more cut off).
+// How much of the picture's width to keep in Fill. 1 = a square cut from the
+// middle, which fills a bit over half of the tall screen.
 const FOREGROUND_ASPECT = 1;
 
 // Clips shorter than this get extended at the end so nothing comes out tiny.
@@ -21,24 +24,42 @@ const MIN_CLIP_SECONDS = 20;
 const CAPTION_FONT_SIZE = 12;
 const CAPTION_MARGIN_BOTTOM = 50; // higher number = captions sit higher up
 const WORDS_PER_CAPTION = 3;
+
+// Face cam split: how big the face cam corner is, as a fraction of the source.
+const FACE_CAM_SIZES = { small: 0.25, medium: 0.34, large: 0.5 };
+const FACE_CAM_CORNERS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+const LAYOUT_TYPES = ['fill', 'fit', 'split', 'wide'];
 // -----------------------------------------------------------------------------
 
-async function generateClip({ inputFile, outputPath, startTime, endTime, transcript, momentId }) {
+// Fill in defaults for whatever the caller left out.
+function normalizeLayout(layout = {}) {
+  return {
+    type: LAYOUT_TYPES.includes(layout.type) ? layout.type : 'fill',
+    captions: layout.captions !== false, // default on
+    faceCamCorner: FACE_CAM_CORNERS.includes(layout.faceCamCorner) ? layout.faceCamCorner : 'top-right',
+    faceCamSize: FACE_CAM_SIZES[layout.faceCamSize] ? layout.faceCamSize : 'medium',
+  };
+}
+
+async function generateClip({ inputFile, outputPath, startTime, endTime, transcript, momentId, layout }) {
   const start = Math.max(0, Number(startTime) || 0);
   let end = Number(endTime) || start + MIN_CLIP_SECONDS;
   if (end - start < MIN_CLIP_SECONDS) end = start + MIN_CLIP_SECONDS;
   const duration = end - start;
 
+  const opts = normalizeLayout(layout);
   const srtPath = outputPath.replace('.mp4', '.srt');
 
-  // Generate SRT subtitle file for this clip's time range
-  if (transcript?.words?.length > 0) {
-    generateSRT(transcript.words, start, end, srtPath);
-  } else if (transcript?.segments?.length > 0) {
-    generateSRTFromSegments(transcript.segments, start, end, srtPath);
+  // Only build captions if the user kept them on.
+  if (opts.captions) {
+    if (transcript?.words?.length > 0) {
+      generateSRT(transcript.words, start, end, srtPath);
+    } else if (transcript?.segments?.length > 0) {
+      generateSRTFromSegments(transcript.segments, start, end, srtPath);
+    }
   }
 
-  const hasSubs = fs.existsSync(srtPath);
+  const hasSubs = opts.captions && fs.existsSync(srtPath);
   const hasAudio = await probeHasAudio(inputFile);
 
   return new Promise((resolve, reject) => {
@@ -46,7 +67,7 @@ async function generateClip({ inputFile, outputPath, startTime, endTime, transcr
       .setStartTime(start)
       .setDuration(duration)
       .outputOptions([
-        '-filter_complex', buildFilterGraph(hasSubs, srtPath, hasAudio),
+        '-filter_complex', buildFilterGraph(opts, hasSubs, srtPath, hasAudio),
         '-map', '[v]',
         ...(hasAudio ? ['-map', '[a]'] : []),
         '-c:v libx264',
@@ -82,43 +103,85 @@ function probeHasAudio(inputFile) {
   });
 }
 
-// Builds the 9:16 picture: a blurred, darkened copy of the video fills the
-// whole frame, and the real video sits on top, enlarged, in the middle.
-// When the video has sound, loudnorm evens the volume to a consistent level
-// so every clip plays back at a similar loudness.
-function buildFilterGraph(hasSubs, srtPath, hasAudio) {
-  // The background is blurred at a small size and then enlarged, which is much
-  // faster than blurring at full size and looks the same.
-  const background =
-    '[0:v]split=2[bgsrc][fgsrc];' +
-    '[bgsrc]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,' +
-    `boxblur=6:2,scale=${OUT_W}:${OUT_H},eq=brightness=-0.12[bg]`;
+// Builds the full filter graph for the chosen layout. Every layout ends in a
+// [vbase] video label; captions and loudness are then added on top.
+function buildFilterGraph(opts, hasSubs, srtPath, hasAudio) {
+  const segments = [];
+  let caption; // { alignment, marginV } - where to place captions for this layout
 
-  const foreground =
-    `[fgsrc]crop='min(iw,ih*${FOREGROUND_ASPECT})':ih,` +
-    `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=decrease:force_divisible_by=2[fg]`;
+  if (opts.type === 'wide') {
+    // Original wide: keep 16:9, just fit onto a clean 1920x1080 frame.
+    segments.push(
+      `[0:v]scale=${WIDE_W}:${WIDE_H}:force_original_aspect_ratio=decrease,` +
+      `pad=${WIDE_W}:${WIDE_H}:(ow-iw)/2:(oh-ih)/2,setsar=1[vbase]`
+    );
+    caption = { alignment: 2, marginV: 30 }; // near the bottom
+  } else if (opts.type === 'split') {
+    // Face cam split: face cam cropped to the top half, full frame on the bottom.
+    const f = FACE_CAM_SIZES[opts.faceCamSize];
+    const w = `iw*${f}`;
+    const h = `ih*${f}`;
+    const right = `iw-iw*${f}`;
+    const bottom = `ih-ih*${f}`;
+    const pos = {
+      'top-left': `0:0`,
+      'top-right': `${right}:0`,
+      'bottom-left': `0:${bottom}`,
+      'bottom-right': `${right}:${bottom}`,
+    }[opts.faceCamCorner];
+    const halfH = OUT_H / 2; // 960
 
-  let combined = '[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1';
+    segments.push('[0:v]split=2[top][bot]');
+    segments.push(
+      `[top]crop='${w}':'${h}':'${pos.split(':')[0]}':'${pos.split(':')[1]}',` +
+      `scale=${OUT_W}:${halfH}:force_original_aspect_ratio=increase,crop=${OUT_W}:${halfH},setsar=1[vtop]`
+    );
+    segments.push(
+      `[bot]scale=${OUT_W}:${halfH}:force_original_aspect_ratio=increase,crop=${OUT_W}:${halfH},setsar=1[vbot]`
+    );
+    segments.push('[vtop][vbot]vstack=inputs=2[vbase]');
+    caption = { alignment: 5, marginV: 0 }; // centred = right between the two panels
+  } else {
+    // Fill (default) and Fit both sit on a blurred, darkened background.
+    segments.push('[0:v]split=2[bgsrc][fgsrc]');
+    segments.push(
+      '[bgsrc]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,' +
+      `boxblur=6:2,scale=${OUT_W}:${OUT_H},eq=brightness=-0.12[bg]`
+    );
+    if (opts.type === 'fit') {
+      // Fit: whole frame visible, scaled to the width, nothing cropped.
+      segments.push(
+        `[fgsrc]scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=decrease:force_divisible_by=2[fg]`
+      );
+    } else {
+      // Fill: a square cut from the middle.
+      segments.push(
+        `[fgsrc]crop='min(iw,ih*${FOREGROUND_ASPECT})':ih,` +
+        `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=decrease:force_divisible_by=2[fg]`
+      );
+    }
+    segments.push('[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[vbase]');
+    caption = { alignment: 2, marginV: CAPTION_MARGIN_BOTTOM }; // near the bottom
+  }
 
+  // Captions on top of the layout, placed where this layout wants them.
   if (hasSubs) {
-    // Escape Windows path separators for FFmpeg filter
     const escapedSrt = srtPath.replace(/\\/g, '/').replace(/:/g, '\\:');
     const style =
       `FontName=Arial,FontSize=${CAPTION_FONT_SIZE},Bold=1,` +
       'PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,Outline=1.5,Shadow=0,' +
-      `Alignment=2,MarginV=${CAPTION_MARGIN_BOTTOM}`;
-    combined += `,subtitles='${escapedSrt}':force_style='${style}'`;
+      `Alignment=${caption.alignment},MarginV=${caption.marginV}`;
+    segments.push(`[vbase]subtitles='${escapedSrt}':force_style='${style}'[v]`);
+  } else {
+    segments.push('[vbase]null[v]');
   }
 
-  let graph = `${background};${foreground};${combined}[v]`;
-
-  // Normalise loudness to about -14 LUFS (a common target for social video) so
-  // clips are not wildly louder or quieter than one another.
+  // Normalise loudness to about -14 LUFS so clips are a consistent volume.
   if (hasAudio) {
-    graph += ';[0:a]loudnorm=I=-14:TP=-1.5:LRA=11[a]';
+    segments.push('[0:a]loudnorm=I=-14:TP=-1.5:LRA=11[a]');
   }
 
-  return graph;
+  return segments.join(';');
 }
 
 function generateSRT(words, clipStart, clipEnd, outputPath) {

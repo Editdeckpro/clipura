@@ -95,7 +95,7 @@ router.post('/:id/generate', async (req, res) => {
     return res.status(400).json({ error: 'Job not ready for clip generation' });
   }
 
-  const { selectedMoments, momentOverrides = {} } = req.body;
+  const { selectedMoments, momentOverrides = {}, layout } = req.body;
   if (!selectedMoments || !Array.isArray(selectedMoments) || selectedMoments.length === 0) {
     return res.status(400).json({ error: 'Select at least one moment to generate' });
   }
@@ -116,7 +116,8 @@ router.post('/:id/generate', async (req, res) => {
 
   res.json({ message: 'Clip generation started', count: momentsToGenerate.length });
 
-  generateClips(req.params.id, job.inputFile, momentsToGenerate, job.transcript);
+  // layout applies to every clip in this batch (ffmpeg fills in any defaults).
+  generateClips(req.params.id, job.inputFile, momentsToGenerate, job.transcript, layout);
 });
 
 // GET /api/jobs/:id/download - download all clips as zip
@@ -146,7 +147,7 @@ router.get('/:id/download', async (req, res) => {
 // How many clips to render at the same time. More is faster but uses more CPU.
 const MAX_CONCURRENT_CLIPS = 3;
 
-async function generateClips(jobId, inputFile, moments, transcript) {
+async function generateClips(jobId, inputFile, moments, transcript, layout) {
   const outputDir = path.join(__dirname, '../outputs', jobId);
 
   // Remove clips from any previous run first, so a remake never leaves stale
@@ -175,6 +176,7 @@ async function generateClips(jobId, inputFile, moments, transcript) {
           endTime: moment.endTime,
           transcript,
           momentId: moment.id,
+          layout,
         });
         clips[i] = { momentId: moment.id, file: path.basename(outputPath), status: 'done' };
       } catch (err) {
