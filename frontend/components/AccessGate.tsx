@@ -11,6 +11,16 @@ export default function AccessGate({ children }: { children: React.ReactNode }) 
   const [code, setCode] = useState('');
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
+  // Set when an action was blocked for a missing/expired code (see api.ts).
+  const [needCode, setNeedCode] = useState(false);
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('clipura:need-code')) {
+        sessionStorage.removeItem('clipura:need-code');
+        setNeedCode(true);
+      }
+    } catch {}
+  }, []);
 
   // Returns true if the app should be shown.
   const check = async (): Promise<boolean> => {
@@ -85,7 +95,9 @@ export default function AccessGate({ children }: { children: React.ReactNode }) 
             <Lock size={20} className="text-brand-400" />
           </div>
           <h1 className="text-white font-bold text-xl mb-1">This is a private demo</h1>
-          <p className="text-white/40 text-sm mb-6">Enter the access code you were given.</p>
+          <p className="text-white/40 text-sm mb-6">
+            {needCode ? 'Please enter the access code to continue.' : 'Enter the access code you were given.'}
+          </p>
           <form onSubmit={submit} className="space-y-3">
             <input
               type="text"

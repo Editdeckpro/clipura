@@ -24,6 +24,21 @@ api.interceptors.request.use(cfg => {
   return cfg;
 });
 
+// If any request is rejected for a missing/wrong access code, forget the code and
+// send the person back to the access-code screen with a plain message — never let
+// the raw "access_required" text reach the UI.
+api.interceptors.response.use(
+  res => res,
+  err => {
+    if (err?.response?.status === 401 && err.response.data?.error === 'access_required') {
+      setAccessCode('');
+      try { sessionStorage.setItem('clipura:need-code', '1'); } catch {}
+      if (typeof window !== 'undefined') window.location.reload();
+    }
+    return Promise.reject(err);
+  }
+);
+
 export async function getConfig(): Promise<{ accessRequired: boolean; valid: boolean }> {
   // Short timeout so an offline backend is detected quickly (not after minutes).
   const res = await api.get<{ accessRequired: boolean; valid: boolean }>('/config', { timeout: 8000 });
