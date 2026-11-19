@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Download, Trash2, Play, Film, Bookmark } from 'lucide-react';
+import { Download, Trash2, Play, Film, Bookmark, Clock } from 'lucide-react';
 import { getSavedClips, deleteSavedClip, getClipUrl, SavedClip } from '@/lib/api';
+
+type Availability = 'checking' | 'available' | 'expired';
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -18,10 +20,38 @@ function timeAgo(iso: string) {
 export default function SavedClips() {
   const [clips, setClips] = useState<SavedClip[]>([]);
   const [previewing, setPreviewing] = useState<string | null>(null);
+  const [availability, setAvailability] = useState<Record<string, Availability>>({});
 
   useEffect(() => {
     setClips(getSavedClips());
   }, []);
+
+  // A saved clip points at a file on the server. Files are kept for 7 days, so an
+  // older clip's file may be gone. Check each one and flag the missing ones as
+  // expired, rather than showing a player that cannot load.
+  useEffect(() => {
+    if (clips.length === 0) return;
+    const controller = new AbortController();
+
+    clips.forEach(clip => {
+      const url = getClipUrl(clip.jobId, clip.filename);
+      setAvailability(prev => (prev[clip.id] ? prev : { ...prev, [clip.id]: 'checking' }));
+      fetch(url, { method: 'HEAD', signal: controller.signal })
+        .then(res => {
+          setAvailability(prev => ({
+            ...prev,
+            [clip.id]: res.status === 404 ? 'expired' : 'available',
+          }));
+        })
+        .catch(err => {
+          // A network/abort error is not proof the clip is gone - assume it is fine.
+          if (err?.name === 'AbortError') return;
+          setAvailability(prev => ({ ...prev, [clip.id]: 'available' }));
+        });
+    });
+
+    return () => controller.abort();
+  }, [clips]);
 
   const handleDelete = (id: string) => {
     deleteSavedClip(id);
@@ -37,7 +67,7 @@ export default function SavedClips() {
         </div>
         <h2 className="text-xl font-bold text-white mb-2">No saved clips yet</h2>
         <p className="text-white/40 text-sm max-w-xs mx-auto">
-          Generate clips from a podcast and click &ldquo;Save&rdquo; to build your library.
+          Make clips from a video or stream and they will show up here automatically.
         </p>
       </div>
     );
@@ -56,6 +86,39 @@ export default function SavedClips() {
         {clips.map(clip => {
           const clipUrl = getClipUrl(clip.jobId, clip.filename);
           const isPreviewOpen = previewing === clip.id;
+          const isExpired = availability[clip.id] === 'expired';
+
+          if (isExpired) {
+            return (
+              <div
+                key={clip.id}
+                className="bg-surface-1 border border-white/7 rounded-2xl overflow-hidden opacity-70"
+              >
+                <div className="p-4 flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/8 flex items-center justify-center flex-shrink-0">
+                    <Clock size={16} className="text-white/30" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white/50 leading-snug line-clamp-1">
+                      {clip.hook}
+                    </p>
+                    <p className="text-xs text-yellow-400/70 mt-1">
+                      This clip has expired. Clips are kept for 7 days - make it again to get a new one.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => handleDelete(clip.id)}
+                      title="Remove from library"
+                      className="p-2 rounded-lg border bg-white/5 border-white/8 text-white/30 hover:text-red-400 hover:border-red-400/20 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
 
           return (
             <div

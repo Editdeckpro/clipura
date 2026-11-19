@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Clip Factory — Podcast Clips at Scale',
-  description: 'Transform business podcasts into viral short-form clips.',
+  title: 'Clip Factory — Clips at Scale',
+  description: 'Turn videos and live streams into viral short-form clips.',
   icons: { icon: '/favicon.ico' },
 };
 

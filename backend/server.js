@@ -82,9 +82,16 @@ app.use((err, req, res, next) => {
   res.status(status).json({ error: message });
 });
 
-// ── File cleanup: delete uploads + outputs older than 4 hours ─────────────────
-function cleanOldFiles(dir) {
-  const cutoff = Date.now() - 4 * 60 * 60 * 1000;
+// ── File cleanup ───────────────────────────────────────────────────────────────
+// Finished clips (outputs) are kept for 7 days so they stay playable in My Clips.
+// Source uploads are large and only needed while a video is being processed, so
+// they are cleared sooner to save disk.
+const HOUR_MS = 60 * 60 * 1000;
+const CLIP_RETENTION_MS = 7 * 24 * HOUR_MS; // 7 days
+const UPLOAD_RETENTION_MS = 4 * HOUR_MS;    // 4 hours
+
+function cleanOldFiles(dir, maxAgeMs) {
+  const cutoff = Date.now() - maxAgeMs;
   try {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
@@ -99,9 +106,10 @@ function cleanOldFiles(dir) {
 }
 
 setInterval(() => {
-  cleanOldFiles(path.join(__dirname, 'uploads'));
-  cleanOldFiles(path.join(__dirname, 'outputs'));
-}, 60 * 60 * 1000).unref();
+  cleanOldFiles(path.join(__dirname, 'uploads'), UPLOAD_RETENTION_MS);
+  cleanOldFiles(path.join(__dirname, 'temp'), UPLOAD_RETENTION_MS);
+  cleanOldFiles(path.join(__dirname, 'outputs'), CLIP_RETENTION_MS);
+}, HOUR_MS).unref();
 
 // ── Start ──────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
