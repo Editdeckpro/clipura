@@ -53,6 +53,29 @@ function deleteJob(id) {
   jobs.delete(id);
 }
 
+// ── Cancellation ────────────────────────────────────────────────────────────
+// A job can register an AbortController so an in-flight recording/download can
+// be stopped (e.g. from the Cancel button). Kept out of the job object so it is
+// never serialized to the client.
+const abortControllers = new Map();
+
+function createAbort(jobId) {
+  const controller = new AbortController();
+  abortControllers.set(jobId, controller);
+  return controller;
+}
+
+function abortJob(jobId) {
+  const controller = abortControllers.get(jobId);
+  if (!controller) return false;
+  controller.abort();
+  return true;
+}
+
+function clearAbort(jobId) {
+  abortControllers.delete(jobId);
+}
+
 // Purge jobs older than JOB_TTL_MS. Runs every 30 minutes.
 setInterval(() => {
   const cutoff = Date.now() - JOB_TTL_MS;
@@ -63,4 +86,7 @@ setInterval(() => {
   }
 }, 30 * 60 * 1000).unref(); // .unref() so this timer doesn't block process exit
 
-module.exports = { createJob, getJob, updateJob, deleteJob, JOB_STATUS };
+module.exports = {
+  createJob, getJob, updateJob, deleteJob, JOB_STATUS,
+  createAbort, abortJob, clearAbort,
+};

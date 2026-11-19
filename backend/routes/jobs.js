@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const archiver = require('archiver');
-const { getJob, updateJob, JOB_STATUS } = require('../utils/jobManager');
+const { getJob, updateJob, JOB_STATUS, abortJob } = require('../utils/jobManager');
 const { generateClip } = require('../services/ffmpeg');
 const { analyzeMoments } = require('../services/claude');
 
@@ -53,6 +53,14 @@ router.get('/:id/clips/:filename', (req, res) => {
   const filePath = path.join(__dirname, '../outputs', req.params.id, safeFilename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Clip not found' });
   res.sendFile(filePath);
+});
+
+// POST /api/jobs/:id/cancel - stop an in-progress recording/download for this job.
+router.post('/:id/cancel', (req, res) => {
+  const job = getJob(req.params.id);
+  if (!job) return res.status(404).json({ error: 'Job not found' });
+  const cancelled = abortJob(req.params.id);
+  res.json({ cancelled });
 });
 
 // POST /api/jobs/:id/refind - re-run the moment picker on the saved transcript.

@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { createJob, updateJob, JOB_STATUS } = require('../utils/jobManager');
+const { createJob, updateJob, JOB_STATUS, createAbort, clearAbort } = require('../utils/jobManager');
 const { downloadYouTube } = require('../services/youtube');
 const { transcribeAudio } = require('../services/transcription');
 const { analyzeMoments } = require('../services/claude');
@@ -86,27 +86,32 @@ router.post('/youtube', async (req, res) => {
 
 async function processYouTubeJob(jobId, url, liveMinutes) {
   const outputPath = path.join(__dirname, '../uploads', `${jobId}.mp4`);
+  const controller = createAbort(jobId); // lets the Cancel button stop a recording
 
   // Step 1: get the video/stream. If this fails, show a short plain message and
   // keep the full technical log in the server console only.
   try {
     updateJob(jobId, { status: JOB_STATUS.DOWNLOADING, progress: 5, statusMessage: 'Checking the link...' });
 
-    // Map download progress (0..1) into the 5-18% band of the whole job, and keep
-    // it moving forward only so the bar never jumps backwards between stages.
-    let lastProgress = 5;
+    // The download/progress band is 5-18% of the whole job. We let it move both
+    // ways so the percentage reflects real recorded footage (if a live stream
+    // stalls, the backend stops it; progress does not sit frozen forever).
     await downloadYouTube(url, outputPath, {
       liveMinutes,
+      signal: controller.signal,
       onStatus: message => updateJob(jobId, { statusMessage: message }),
       onProgress: fraction => {
         const pct = 5 + Math.round(Math.min(1, Math.max(0, fraction)) * 13);
-        if (pct > lastProgress) {
-          lastProgress = pct;
-          updateJob(jobId, { progress: pct });
-        }
+        updateJob(jobId, { progress: pct });
       },
     });
   } catch (err) {
+    clearAbort(jobId);
+    if (err && err.cancelled) {
+      console.log(`[youtube] recording cancelled by user (job ${jobId})`);
+      updateJob(jobId, { status: JOB_STATUS.ERROR, error: 'Recording cancelled.' });
+      return;
+    }
     console.error('[youtube] stream/video download failed:', err);
     updateJob(jobId, {
       status: JOB_STATUS.ERROR,
@@ -114,6 +119,7 @@ async function processYouTubeJob(jobId, url, liveMinutes) {
     });
     return;
   }
+  clearAbort(jobId);
 
   // Step 2: transcribe + pick moments (these set their own friendly messages).
   updateJob(jobId, { inputFile: outputPath, progress: 20, statusMessage: 'Video ready' });

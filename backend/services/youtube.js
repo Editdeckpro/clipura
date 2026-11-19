@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 const ffmpeg = require('fluent-ffmpeg');
 const YTDlpWrap = require('yt-dlp-wrap').default;
 
@@ -20,6 +21,11 @@ const LIVE_MAX_MINUTES = 60;
 const LIVE_MAX_HEIGHT = 720;
 const LIVE_FORMAT =
   `bv*[height<=${LIVE_MAX_HEIGHT}]+ba/b[height<=${LIVE_MAX_HEIGHT}]/b`;
+
+// Safety limits so a live recording can never run away or freeze forever.
+const LIVE_GRACE_MS = 2 * 60 * 1000;   // stop if it runs 2 min past what was asked
+const LIVE_STALL_MS = 60 * 1000;       // stop if no new footage arrives for 60s
+const MIN_USABLE_BYTES = 2 * 1024 * 1024; // below this we treat it as "nothing recorded"
 // -----------------------------------------------------------------------------
 
 // Newer yt-dlp versions need a JavaScript engine to read YouTube. Node is already installed.
@@ -63,12 +69,13 @@ async function downloadYouTube(url, outputPath, options = {}) {
       ? `Grabbing the last ${minutes} minutes of the live stream`
       : `Recording the next ${minutes} minutes of the live stream`);
 
-    return downloadLive(yt, url, outputPath, {
+    return downloadLive(url, outputPath, {
       minutes,
       segmentSeconds: live.segmentSeconds,
       onProgress,
       onStatus,
       canGoBack,
+      signal: options.signal,
     });
   }
 
@@ -130,14 +137,14 @@ async function readSegmentSeconds(playlistUrl) {
   }
 }
 
-async function downloadLive(yt, url, outputPath, opts) {
-  const { minutes, segmentSeconds = 5, onProgress = () => {}, onStatus = () => {}, canGoBack } = opts;
+async function downloadLive(url, outputPath, opts) {
+  const { minutes, segmentSeconds = 5, onProgress = () => {}, onStatus = () => {}, canGoBack, signal } = opts;
   const seconds = minutes * 60;
 
   const dir = path.dirname(outputPath);
   const base = path.basename(outputPath, path.extname(outputPath));
-  // Record into an MPEG-TS file: it is the natural container for live HLS and
-  // stream-copies cleanly to MP4 afterwards.
+  // Record into an MPEG-TS file: it is the natural container for live HLS,
+  // survives being cut off part-way, and stream-copies cleanly to MP4 after.
   const rawPath = path.join(dir, `${base}.live.ts`);
 
   const args = [
@@ -149,7 +156,8 @@ async function downloadLive(yt, url, outputPath, opts) {
     // fails after a clean recording and throws the finished file away. We
     // repackage the recording ourselves below instead.
     '--fixup', 'never',
-    // Stop once we have the minutes we asked for.
+    // Ask ffmpeg to stop once it has the minutes we want. This is a best effort:
+    // the hard limit below is what actually guarantees we stop.
     '--downloader-args', `ffmpeg_o:-t ${seconds}`,
     '--output', rawPath,
     '--no-part',
@@ -163,39 +171,24 @@ async function downloadLive(yt, url, outputPath, opts) {
     args.push('--downloader-args', `ffmpeg_i:-live_start_index -${segmentsBack}`);
   }
 
-  const poll = canGoBack
-    // Going back fills fast (faster than real time), so track the file growing.
-    ? (() => {
-        const expectedBytes = minutes * 12 * 1024 * 1024;
-        return setInterval(() => {
-          try { onProgress(Math.min(0.95, fs.statSync(rawPath).size / expectedBytes)); } catch (_) {}
-        }, 600);
-      })()
-    // Recording forward happens in real time, so progress is just elapsed time,
-    // and we can show how long is left.
-    : (() => {
-        const startedAt = Date.now();
-        return setInterval(() => {
-          const elapsed = (Date.now() - startedAt) / 1000;
-          onProgress(Math.min(0.95, elapsed / seconds));
-          onStatus(`Recording the live stream... about ${formatRemaining(seconds - elapsed)} left`);
-        }, 1000);
-      })();
+  const result = await recordLive({ args, rawPath, seconds, minutes, canGoBack, onProgress, onStatus, signal });
 
-  // Keep any recording even if yt-dlp exits non-zero (e.g. a late post-step):
-  // we only fail if there is genuinely no usable file on disk.
-  let runError = null;
-  try {
-    await run(yt, args);
-  } catch (err) {
-    runError = err;
+  // A real cancel means the user wants to stop entirely - do not carry on.
+  if (result.reason === 'cancel') {
+    fs.unlink(rawPath, () => {});
+    const err = new Error('Recording cancelled');
+    err.cancelled = true;
+    throw err;
   }
-  clearInterval(poll);
 
   try {
-    const haveFile = fs.existsSync(rawPath) && fs.statSync(rawPath).size > 64 * 1024;
-    if (!haveFile) {
-      throw new Error(runError ? runError.message : 'The live recording produced no file');
+    const bytes = fs.existsSync(rawPath) ? fs.statSync(rawPath).size : 0;
+    if (bytes < MIN_USABLE_BYTES) {
+      // Nothing (or almost nothing) was captured - surface the plain error.
+      throw new Error(`live recording produced no usable file (reason: ${result.reason})`);
+    }
+    if (result.reason === 'timeout' || result.reason === 'stall') {
+      console.warn(`[live] stopped early (${result.reason}) - keeping ${(bytes / 1024 / 1024).toFixed(1)}MB recorded so far`);
     }
     onProgress(0.97);
     onStatus('Getting the recording ready');
@@ -205,6 +198,100 @@ async function downloadLive(yt, url, outputPath, opts) {
   } finally {
     fs.unlink(rawPath, () => {});
   }
+}
+
+// Runs the yt-dlp live recording as a child we fully control, so we can show
+// real progress and guarantee it stops. Resolves with { reason } where reason
+// is 'complete' (yt-dlp finished), 'timeout' (ran past the limit), 'stall' (no
+// new footage for 60s) or 'cancel' (user stopped it). Never hangs.
+function recordLive({ args, rawPath, seconds, minutes, canGoBack, onProgress, onStatus, signal }) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(BINARY, args, { windowsHide: true });
+
+    let reason = null;         // set once we decide to stop early
+    let settled = false;
+    const startedAt = Date.now();
+
+    // Real recorded position. We read ffmpeg's "time=HH:MM:SS" when we can see
+    // it, and fall back to counting the seconds during which the file is
+    // actually growing - so progress only moves when real footage arrives.
+    let ffmpegSec = 0;
+    let activeSec = 0;
+    let lastBytes = 0;
+    let lastAdvanceAt = Date.now();
+
+    const parseTime = chunk => {
+      const m = String(chunk).match(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/g);
+      if (!m) return;
+      const last = m[m.length - 1].match(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/);
+      if (last) ffmpegSec = Math.max(ffmpegSec, (+last[1]) * 3600 + (+last[2]) * 60 + parseFloat(last[3]));
+    };
+    const stderr = [];
+    child.stderr.on('data', d => { stderr.push(d.toString()); if (stderr.length > 200) stderr.shift(); parseTime(d); });
+    child.stdout.on('data', parseTime);
+
+    const stop = (why) => {
+      if (reason) return;
+      reason = why;
+      killTree(child);
+    };
+
+    // Let the caller cancel from outside (the Cancel button).
+    if (signal) {
+      if (signal.aborted) stop('cancel');
+      else signal.addEventListener('abort', () => stop('cancel'), { once: true });
+    }
+
+    const poll = setInterval(() => {
+      let bytes = 0;
+      try { bytes = fs.statSync(rawPath).size; } catch (_) {}
+      const grew = bytes > lastBytes;
+      if (grew) { lastBytes = bytes; activeSec += 1; }
+      if (grew || ffmpegSec > activeSec) lastAdvanceAt = Date.now();
+
+      const recordedSec = Math.min(seconds, Math.max(ffmpegSec, activeSec));
+      onProgress(Math.min(0.95, recordedSec / seconds));
+      onStatus(canGoBack
+        ? `Grabbing the last ${minutes} minutes of the live stream`
+        : `Recording the live stream... about ${formatRemaining(seconds - recordedSec)} left`);
+
+      // Hard limits.
+      if (Date.now() - startedAt > seconds * 1000 + LIVE_GRACE_MS) stop('timeout');
+      else if (Date.now() - lastAdvanceAt > LIVE_STALL_MS) stop('stall');
+    }, 1000);
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearInterval(poll);
+      resolve({ reason: reason || 'complete' });
+    };
+
+    child.on('error', err => {
+      if (settled) return;
+      settled = true;
+      clearInterval(poll);
+      // Keep the tail of yt-dlp's own output in the server log for diagnosis.
+      if (stderr.length) console.error('[live] yt-dlp error output:\n' + stderr.join('').slice(-2000));
+      reject(err);
+    });
+    child.on('close', () => {
+      if (!reason && stderr.length) console.error('[live] yt-dlp finished; last output:\n' + stderr.join('').slice(-1500));
+      finish();
+    });
+  });
+}
+
+// Kill the whole process tree. yt-dlp spawns ffmpeg as a child, so on Windows we
+// use taskkill /T to take down both; elsewhere a SIGKILL to the group.
+function killTree(child) {
+  try {
+    if (process.platform === 'win32') {
+      spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], { windowsHide: true });
+    } else {
+      child.kill('SIGKILL');
+    }
+  } catch (_) {}
 }
 
 // Turn the raw live recording into a normal MP4, trying the cheapest, safest

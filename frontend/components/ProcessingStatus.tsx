@@ -1,8 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Loader2, CheckCircle2 } from 'lucide-react';
-import { getJob, Job } from '@/lib/api';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { Loader2, CheckCircle2, X } from 'lucide-react';
+import { getJob, cancelJob, Job } from '@/lib/api';
+
+// If a recording shows no change for this long, stop waiting and show an error
+// instead of freezing.
+const STALL_TIMEOUT_MS = 60_000;
 
 const STEPS = [
   { key: 'downloading', label: 'Getting the video' },
@@ -20,6 +24,20 @@ interface Props {
 
 export default function ProcessingStatus({ jobId, onReady, onError }: Props) {
   const [job, setJob] = useState<Job | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+
+  // Remember when the job last actually changed, and the latest job, so the
+  // watchdog below can tell whether a recording has frozen.
+  const lastChangeRef = useRef<{ sig: string; at: number }>({ sig: '', at: Date.now() });
+  const jobRef = useRef<Job | null>(null);
+  const firedRef = useRef(false);
+
+  const apply = useCallback((data: Job) => {
+    jobRef.current = data;
+    setJob(data);
+    const sig = `${data.status}|${data.progress}|${data.statusMessage}`;
+    if (sig !== lastChangeRef.current.sig) lastChangeRef.current = { sig, at: Date.now() };
+  }, []);
 
   useEffect(() => {
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -27,7 +45,7 @@ export default function ProcessingStatus({ jobId, onReady, onError }: Props) {
 
     source.onmessage = (e) => {
       const data: Job = JSON.parse(e.data);
-      setJob(data);
+      apply(data);
       if (data.status === 'ready' || data.status === 'complete') {
         source.close();
         onReady(data);
@@ -50,7 +68,7 @@ export default function ProcessingStatus({ jobId, onReady, onError }: Props) {
       pollInterval = setInterval(async () => {
         try {
           const data = await getJob(jobId);
-          setJob(data);
+          apply(data);
           if (data.status === 'ready' || data.status === 'complete') {
             clearInterval(pollInterval);
             onReady(data);
@@ -67,7 +85,28 @@ export default function ProcessingStatus({ jobId, onReady, onError }: Props) {
       source.close();
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [jobId, onReady, onError]);
+  }, [jobId, onReady, onError, apply]);
+
+  // Watchdog: while the stream is being recorded, if nothing changes for a
+  // minute (frozen connection or a stalled stream the server could not reach),
+  // show an error instead of leaving the user staring at a stuck bar.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const j = jobRef.current;
+      if (!j || firedRef.current) return;
+      if (j.status === 'downloading' && Date.now() - lastChangeRef.current.at > STALL_TIMEOUT_MS) {
+        firedRef.current = true;
+        clearInterval(id);
+        onError('The live stream stopped responding. Please try again, or try a finished video.');
+      }
+    }, 5000);
+    return () => clearInterval(id);
+  }, [onError]);
+
+  const handleCancel = useCallback(async () => {
+    setCancelling(true);
+    try { await cancelJob(jobId); } catch {}
+  }, [jobId]);
 
   if (!job) {
     return (
@@ -156,6 +195,20 @@ export default function ProcessingStatus({ jobId, onReady, onError }: Props) {
           );
         })}
       </div>
+
+      {/* Cancel - only while the stream is being recorded */}
+      {job.status === 'downloading' && (
+        <div className="mt-8 text-center">
+          <button
+            onClick={handleCancel}
+            disabled={cancelling}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-white/50 hover:text-white hover:border-white/25 disabled:opacity-50 transition-colors text-sm"
+          >
+            <X size={15} />
+            {cancelling ? 'Stopping...' : 'Cancel recording'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
