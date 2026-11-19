@@ -25,7 +25,8 @@ api.interceptors.request.use(cfg => {
 });
 
 export async function getConfig(): Promise<{ accessRequired: boolean; valid: boolean }> {
-  const res = await api.get<{ accessRequired: boolean; valid: boolean }>('/config');
+  // Short timeout so an offline backend is detected quickly (not after minutes).
+  const res = await api.get<{ accessRequired: boolean; valid: boolean }>('/config', { timeout: 8000 });
   return res.data;
 }
 

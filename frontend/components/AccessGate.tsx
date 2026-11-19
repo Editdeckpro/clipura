@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, Lock } from 'lucide-react';
+import { Loader2, Lock, Moon } from 'lucide-react';
 import { getConfig, setAccessCode } from '@/lib/api';
 
-type State = 'loading' | 'open' | 'gated';
+type State = 'loading' | 'open' | 'gated' | 'offline';
 
 export default function AccessGate({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<State>('loading');
@@ -20,9 +20,9 @@ export default function AccessGate({ children }: { children: React.ReactNode }) 
       setState(open ? 'open' : 'gated');
       return open;
     } catch {
-      // If we cannot reach config at all, don't lock the user out.
-      setState('open');
-      return true;
+      // Could not reach the backend at all — it is probably offline/asleep.
+      setState('offline');
+      return false;
     }
   };
 
@@ -38,10 +38,39 @@ export default function AccessGate({ children }: { children: React.ReactNode }) 
     setChecking(false);
   };
 
+  const retry = async () => {
+    setState('loading');
+    await check();
+  };
+
   if (state === 'loading') {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center">
         <Loader2 size={28} className="text-brand-500 animate-spin" />
+      </div>
+    );
+  }
+
+  if (state === 'offline') {
+    return (
+      <div className="min-h-screen bg-surface flex flex-col items-center justify-center px-6">
+        <div className="w-full max-w-sm text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/clipura-logo.png" alt="Clipura" className="h-10 w-auto mx-auto mb-8" />
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white/5 border border-white/10 mb-4">
+            <Moon size={20} className="text-white/50" />
+          </div>
+          <h1 className="text-white font-bold text-xl mb-1">We&rsquo;re offline right now</h1>
+          <p className="text-white/40 text-sm mb-6">
+            Clipura is taking a quick break. Please check back in a little while.
+          </p>
+          <button
+            onClick={retry}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-white/8 hover:bg-white/12 border border-white/10 text-white font-semibold rounded-xl transition-colors text-sm"
+          >
+            Try again
+          </button>
+        </div>
       </div>
     );
   }
