@@ -3,14 +3,14 @@
 import { useState, useCallback } from 'react';
 import {
   Scissors, ChevronRight, RotateCcw, CheckSquare, Square, Bookmark, Check,
-  Radio, Sparkles, Smartphone, SlidersHorizontal, Link2, Download,
+  Radio, Sparkles, Smartphone, SlidersHorizontal, Link2, Download, Search, Loader2,
 } from 'lucide-react';
 import UploadZone from '@/components/UploadZone';
 import ProcessingStatus from '@/components/ProcessingStatus';
 import MomentCard from '@/components/MomentCard';
 import ClipGenerator from '@/components/ClipGenerator';
 import SavedClips from '@/components/SavedClips';
-import { Job, MomentOverride } from '@/lib/api';
+import { Job, MomentOverride, refindMoments } from '@/lib/api';
 
 type Stage = 'upload' | 'processing' | 'select' | 'generate';
 type View = 'workflow' | 'library';
@@ -43,6 +43,9 @@ export default function Home() {
   const [selectedMoments, setSelectedMoments] = useState<string[]>([]);
   const [momentOverrides, setMomentOverrides] = useState<Record<string, MomentOverride>>({});
   const [processingError, setProcessingError] = useState('');
+  const [refindQuery, setRefindQuery] = useState('');
+  const [refinding, setRefinding] = useState(false);
+  const [refindMessage, setRefindMessage] = useState('');
 
   const handleJobCreated = useCallback((id: string) => {
     setJobId(id);
@@ -79,6 +82,28 @@ export default function Home() {
     setSelectedMoments([]);
     setMomentOverrides({});
     setProcessingError('');
+  };
+
+  const handleRefind = async () => {
+    if (!job || refinding) return;
+    setRefinding(true);
+    setRefindMessage('');
+    try {
+      const newMoments = await refindMoments(job.id, refindQuery.trim() || undefined);
+      if (!newMoments || newMoments.length === 0) {
+        setRefindMessage('No different moments found. Try other words, or keep the ones you have.');
+      } else {
+        setJob(prev => (prev ? { ...prev, moments: newMoments } : prev));
+        setSelectedMoments(newMoments.map(m => m.id));
+        setMomentOverrides({}); // old edits referred to the old moments
+        setRefindQuery('');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } catch (err: any) {
+      setRefindMessage(err?.response?.data?.error || err?.message || 'Could not search again. Please try once more.');
+    } finally {
+      setRefinding(false);
+    }
   };
 
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -319,6 +344,44 @@ export default function Home() {
                       <ChevronRight size={16} />
                     </button>
                   </div>
+                </div>
+
+                {/* Find different moments */}
+                <div className="mb-8 bg-surface-1 border border-white/5 rounded-2xl p-5">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Search size={16} className="text-brand-400" />
+                    <h3 className="text-white font-bold text-sm">Not seeing what you want?</h3>
+                  </div>
+                  <p className="text-white/40 text-sm mb-3">
+                    Search the same video again for different moments. This does not re-upload or re-process it.
+                  </p>
+                  <form
+                    onSubmit={e => { e.preventDefault(); handleRefind(); }}
+                    className="flex flex-col sm:flex-row gap-3"
+                  >
+                    <input
+                      type="text"
+                      value={refindQuery}
+                      onChange={e => setRefindQuery(e.target.value)}
+                      placeholder="What are you looking for? e.g. funny moments only (optional)"
+                      disabled={refinding}
+                      className="flex-1 px-4 py-2.5 bg-surface border border-white/10 rounded-xl text-white placeholder-white/25 focus:border-brand-500 focus:outline-none transition-colors text-sm"
+                    />
+                    <button
+                      type="submit"
+                      disabled={refinding}
+                      className="flex items-center justify-center gap-2 px-5 py-2.5 bg-white/8 hover:bg-white/12 disabled:opacity-50 disabled:cursor-not-allowed border border-white/10 text-white font-semibold rounded-xl transition-colors text-sm whitespace-nowrap"
+                    >
+                      {refinding ? (
+                        <><Loader2 size={15} className="animate-spin" /> Finding...</>
+                      ) : (
+                        <><Search size={15} /> Find different moments</>
+                      )}
+                    </button>
+                  </form>
+                  {refindMessage && (
+                    <p className="text-yellow-400/70 text-sm mt-3">{refindMessage}</p>
+                  )}
                 </div>
 
                 <div className="space-y-4">

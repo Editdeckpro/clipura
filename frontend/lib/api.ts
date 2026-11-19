@@ -37,6 +37,11 @@ export async function generateClips(
   await api.post(`/jobs/${jobId}/generate`, { selectedMoments, momentOverrides });
 }
 
+export async function refindMoments(jobId: string, guidance?: string) {
+  const res = await api.post<{ moments: Moment[] }>(`/jobs/${jobId}/refind`, { guidance });
+  return res.data.moments;
+}
+
 export function getDownloadUrl(jobId: string) {
   return `${API_URL}/api/jobs/${jobId}/download`;
 }

@@ -74,8 +74,12 @@ const MOMENTS_TOOL = {
 
 const MIN_TRANSCRIPT_CHARS = 200;
 
-async function analyzeMoments(transcript) {
+// options:
+//   guidance - optional text describing what the user is looking for ("funny moments only")
+//   avoid    - optional array of { startTime, endTime, hook } moments already shown, to skip
+async function analyzeMoments(transcript, options = {}) {
   const claude = getClient();
+  const { guidance, avoid } = options;
 
   // Timestamps are written in plain seconds so the model never has to convert them.
   const transcriptText = transcript.segments && transcript.segments.length
@@ -86,14 +90,26 @@ async function analyzeMoments(transcript) {
     throw new Error('Not enough talking was found in this video to pick clips. Try a video with more speech.');
   }
 
-  const prompt = `Analyze this transcript and identify the best viral moments for short-form clips - up to 6.
+  let prompt = `Analyze this transcript and identify the best viral moments for short-form clips - up to 6.
 Return fewer if only a few are genuinely strong. Skip ads, sponsor reads, promo codes, intros,
-outros, "like and subscribe" calls, and dead air.
+outros, "like and subscribe" calls, and dead air.`;
 
-TRANSCRIPT:
-${transcriptText}
+  if (guidance && String(guidance).trim()) {
+    prompt += `\n\nThe user is specifically looking for: "${String(guidance).trim()}".
+Prioritise moments that match this. If little matches, return the closest moments you can find.`;
+  }
 
-Use the exact second values from the transcript for startTime and endTime.`;
+  const avoidRanges = (Array.isArray(avoid) ? avoid : [])
+    .filter(a => a && Number.isFinite(Number(a.startTime)) && Number.isFinite(Number(a.endTime)));
+  if (avoidRanges.length) {
+    const list = avoidRanges
+      .map(a => `- ${Number(a.startTime).toFixed(1)}s to ${Number(a.endTime).toFixed(1)}s${a.hook ? ` ("${a.hook}")` : ''}`)
+      .join('\n');
+    prompt += `\n\nThese moments have already been shown. Do NOT return them again, and do not
+pick moments that overlap these time ranges. Find different moments:\n${list}`;
+  }
+
+  prompt += `\n\nTRANSCRIPT:\n${transcriptText}\n\nUse the exact second values from the transcript for startTime and endTime.`;
 
   const request = {
     model: 'claude-sonnet-4-6',
@@ -142,7 +158,19 @@ Use the exact second values from the transcript for startTime and endTime.`;
       };
     })
     .filter(m => m.endTime > m.startTime)
+    // Drop anything that mostly repeats a moment we were told to avoid.
+    .filter(m => !overlapsAny(m, avoidRanges))
     .sort((a, b) => b.viralScore - a.viralScore);
+}
+
+// True if moment m overlaps any avoid range by more than half of m's length.
+function overlapsAny(m, ranges) {
+  const mLen = m.endTime - m.startTime;
+  if (mLen <= 0) return false;
+  return ranges.some(r => {
+    const overlap = Math.min(m.endTime, Number(r.endTime)) - Math.max(m.startTime, Number(r.startTime));
+    return overlap > 0 && overlap > mLen * 0.5;
+  });
 }
 
 module.exports = { analyzeMoments };

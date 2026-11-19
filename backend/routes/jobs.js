@@ -4,6 +4,7 @@ const fs = require('fs');
 const archiver = require('archiver');
 const { getJob, updateJob, JOB_STATUS } = require('../utils/jobManager');
 const { generateClip } = require('../services/ffmpeg');
+const { analyzeMoments } = require('../services/claude');
 
 const router = express.Router();
 
@@ -52,6 +53,38 @@ router.get('/:id/clips/:filename', (req, res) => {
   const filePath = path.join(__dirname, '../outputs', req.params.id, safeFilename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Clip not found' });
   res.sendFile(filePath);
+});
+
+// POST /api/jobs/:id/refind - re-run the moment picker on the saved transcript.
+// Optional body: { guidance } - what the user is looking for. Avoids moments already
+// shown and replaces the list. No re-download or re-transcription.
+router.post('/:id/refind', async (req, res) => {
+  const job = getJob(req.params.id);
+  if (!job) return res.status(404).json({ error: 'Job not found' });
+  if (!job.transcript) {
+    return res.status(400).json({ error: 'This video is no longer available to search. Start a new one.' });
+  }
+
+  const { guidance } = req.body || {};
+
+  // Avoid everything shown so far: moments on screen now plus any from earlier searches.
+  const current = (job.moments || []).map(m => ({ startTime: m.startTime, endTime: m.endTime, hook: m.hook }));
+  const avoid = [...(job.seenMoments || []), ...current];
+
+  try {
+    const moments = await analyzeMoments(job.transcript, { guidance, avoid });
+    const seenMoments = [...avoid, ...moments.map(m => ({ startTime: m.startTime, endTime: m.endTime, hook: m.hook }))];
+    updateJob(req.params.id, {
+      moments,
+      seenMoments,
+      status: JOB_STATUS.READY,
+      statusMessage: `Found ${moments.length} moments.`,
+    });
+    res.json({ moments });
+  } catch (err) {
+    console.error('Refind error:', err);
+    res.status(500).json({ error: err.message || 'Could not find different moments.' });
+  }
 });
 
 // POST /api/jobs/:id/generate - generate selected clips
