@@ -43,13 +43,23 @@ app.use(express.json({ limit: BODY_LIMIT }));
 app.use(express.urlencoded({ extended: true, limit: BODY_LIMIT }));
 
 // ── Rate limiting ──────────────────────────────────────────────────────────────
+// Behind a tunnel/proxy, the real visitor IP arrives in a forwarded header rather
+// than the socket. Trust the proxy and identify visitors by Cloudflare's real
+// client-IP header (falling back to the standard forwarded IP) so per-visitor
+// limits actually apply per visitor, not lumped together.
+app.set('trust proxy', true);
+const clientKey = req =>
+  req.headers['cf-connecting-ip'] || req.ip || req.socket?.remoteAddress || 'unknown';
+
 // Generous limits — this is a professional tool, not a public API
 const uploadLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 20,                   // 20 uploads per IP per hour
+  max: 20,                   // 20 uploads per visitor per hour
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many uploads from this IP. Please try again later.' },
+  keyGenerator: clientKey,
+  validate: false,
+  message: { error: 'Too many uploads from this address. Please try again later.' },
   skip: () => !IS_PROD,      // disabled in development
 });
 
@@ -58,6 +68,8 @@ const apiLimiter = rateLimit({
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: clientKey,
+  validate: false,
   skip: () => !IS_PROD,
 });
 
