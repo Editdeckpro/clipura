@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 
 const uploadRoutes = require('./routes/upload');
 const jobRoutes = require('./routes/jobs');
+const waitlistRoutes = require('./routes/waitlist');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -64,6 +65,7 @@ app.use('/outputs', express.static(path.join(__dirname, 'outputs')));
 // ── Routes ─────────────────────────────────────────────────────────────────────
 app.use('/api/upload', uploadRoutes);
 app.use('/api/jobs', jobRoutes);
+app.use('/api/waitlist', waitlistRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 

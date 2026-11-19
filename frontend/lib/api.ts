@@ -42,6 +42,10 @@ export async function cancelJob(jobId: string) {
   await api.post(`/jobs/${jobId}/cancel`);
 }
 
+export async function joinWaitlist(email: string, plan?: string) {
+  await api.post('/waitlist', { email, plan });
+}
+
 export async function refindMoments(jobId: string, guidance?: string) {
   const res = await api.post<{ moments: Moment[] }>(`/jobs/${jobId}/refind`, { guidance });
   return res.data.moments;

@@ -13,3 +13,4 @@ frontend/.next/
 /logo/
 .DS_Store
 Thumbs.db
+frontend/.next-build/

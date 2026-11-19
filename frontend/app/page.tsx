@@ -20,13 +20,13 @@ type Stage = 'upload' | 'processing' | 'select' | 'generate';
 type View = 'workflow' | 'library';
 
 const HOW_IT_WORKS = [
-  { icon: Link2, title: 'Paste a link or upload', desc: 'A YouTube, Twitch, or Kick link, a stream that is live right now, or a file from your computer.' },
-  { icon: Sparkles, title: 'We find the moments', desc: 'Every moment gets a score, so the strongest clips are at the top.' },
-  { icon: Download, title: 'Review and download', desc: 'Adjust the cut if you want, then download clips ready to post.' },
+  { icon: Link2, title: 'Paste a link or upload your video', desc: 'A YouTube, Twitch, or Kick link, a stream that is live right now, or a file from your computer.' },
+  { icon: Sparkles, title: 'We find your best moments', desc: 'Every moment gets a score, so the strongest clips rise to the top.' },
+  { icon: Download, title: 'Download and share your clips', desc: 'Adjust the cut if you want, then download clips ready for TikTok, Reels, and Shorts.' },
 ];
 
 const FEATURES = [
-  { icon: Radio, title: 'Clip streams while they are live', desc: 'Paste a live YouTube, Twitch, or Kick link and get clips from the last 10 minutes. Post while everyone is still watching.' },
+  { icon: Radio, title: 'Clip streams while they are live', desc: 'Paste a live YouTube, Twitch, or Kick link and get clips from the live stream. Post while everyone is still watching.' },
   { icon: Sparkles, title: 'Scored moments', desc: 'Funny lines, big reactions, bold takes. Each one is scored from 0 to 100 so you know what to post first.' },
   { icon: Smartphone, title: 'Vertical and captioned', desc: 'Every clip comes out in 9:16 with captions, sized for TikTok, Reels, and Shorts.' },
   { icon: SlidersHorizontal, title: 'You stay in control', desc: 'Move the start and end, edit the hook, and save the clips you want to keep.' },
@@ -34,9 +34,9 @@ const FEATURES = [
 
 const FAQ = [
   { q: 'What can I clip?', a: 'YouTube, Twitch, and Kick links (finished videos and streams that are live right now), and files you upload (MP4, MOV, MKV, WEBM, MP3, WAV and more).' },
-  { q: 'How does live clipping work?', a: 'Paste the link to a stream while it is live. Clipura grabs the last 10 minutes and finds the best moments in it.' },
+  { q: 'How does live clipping work?', a: 'Paste a link while the stream is live. YouTube can go back and grab the last several minutes; Twitch and Kick record the next few minutes forward. Either way you get a clip from the live stream.' },
   { q: 'How does it pick the moments?', a: 'It reads what is being said and scores each moment for how shareable it is. Videos with someone talking give the best results.' },
-  { q: 'How long does it take?', a: 'Most videos are ready to review in a few minutes. Longer videos take longer.' },
+  { q: 'How long are my clips kept?', a: 'Finished clips are kept for 7 days so you have time to download them. You can remake a clip from the same video while it is still available.' },
 ];
 
 export default function Home() {
@@ -239,20 +239,46 @@ export default function Home() {
                     <Radio size={14} />
                     Now works on live streams
                   </div>
-                  <h1 className="text-4xl sm:text-5xl font-black text-white mb-4 tracking-tight leading-tight">
-                    Turn streams and long videos<br className="hidden sm:block" />{' '}
-                    into <span className="text-brand-500">clips worth posting</span>
+                  <h1 className="text-4xl sm:text-6xl font-black text-white mb-4 tracking-tight leading-tight">
+                    One Video. <span className="text-brand-500">Endless Content.</span>
                   </h1>
                   <p className="text-white/50 text-lg sm:text-xl max-w-2xl mx-auto">
-                    Paste a link. Clipura finds the best moments, cuts them vertical,
-                    and adds captions. Ready for TikTok, Reels, and Shorts.
+                    Turn long videos and live streams into short, engaging clips in minutes.
+                    We find the best moments, add captions, and format them for TikTok,
+                    Instagram Reels, and YouTube Shorts.
                   </p>
+
+                  {/* Differentiators */}
+                  <div className="flex flex-wrap items-center justify-center gap-3 mt-7">
+                    <span className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-surface-1 border border-white/8 rounded-full text-white/70 text-sm font-medium">
+                      <Link2 size={14} className="text-brand-400" />
+                      Paste a YouTube, Twitch, or Kick link
+                    </span>
+                    <span className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-surface-1 border border-white/8 rounded-full text-white/70 text-sm font-medium">
+                      <Radio size={14} className="text-gold-400" />
+                      Works on streams that are live right now
+                    </span>
+                  </div>
+
+                  {/* CTAs */}
+                  <div className="flex flex-wrap items-center justify-center gap-3 mt-7">
+                    <a href="#get-my-free-clip" className="inline-flex items-center gap-2 px-7 py-3.5 bg-brand-500 hover:bg-brand-400 text-white font-bold rounded-xl transition-colors glow-brand">
+                      Get My Free Clip
+                      <ChevronRight size={18} />
+                    </a>
+                    <a href="#how-it-works" className="inline-flex items-center gap-2 px-7 py-3.5 bg-white/8 hover:bg-white/12 border border-white/10 text-white font-semibold rounded-xl transition-colors">
+                      See How It Works
+                    </a>
+                  </div>
+                  <p className="text-white/35 text-sm mt-5">Your First Clip Is On Us.</p>
                 </div>
 
-                <UploadZone onJobCreated={handleJobCreated} />
+                <div id="get-my-free-clip" className="scroll-mt-24">
+                  <UploadZone onJobCreated={handleJobCreated} />
+                </div>
 
                 {/* How it works */}
-                <section className="mt-20">
+                <section id="how-it-works" className="mt-20 scroll-mt-24">
                   <h2 className="text-center text-white font-black text-2xl mb-8">How it works</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {HOW_IT_WORKS.map((item, i) => (
@@ -289,6 +315,36 @@ export default function Home() {
                   </div>
                 </section>
 
+                {/* Pricing preview */}
+                <section className="mt-20">
+                  <h2 className="text-center text-white font-black text-2xl mb-2">Simple pricing</h2>
+                  <p className="text-center text-white/40 mb-8">Every plan does everything. Plans differ by processing minutes only.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
+                    {[
+                      { name: 'Starter', price: 22, minutes: '300', highlight: false },
+                      { name: 'Creator', price: 39, minutes: '500', highlight: true },
+                      { name: 'Pro', price: 69, minutes: '1,200', highlight: false },
+                    ].map(p => (
+                      <div
+                        key={p.name}
+                        className={`rounded-2xl border p-6 text-center ${
+                          p.highlight ? 'bg-surface-1 border-brand-500/50' : 'bg-surface-1 border-white/8'
+                        }`}
+                      >
+                        <p className="text-white font-bold">{p.name}</p>
+                        <p className="text-3xl font-black text-white mt-2">${p.price}<span className="text-white/40 text-sm font-medium">/mo</span></p>
+                        <p className={`text-sm font-semibold mt-1 ${p.highlight ? 'text-gold-400' : 'text-brand-400'}`}>{p.minutes} min/month</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-center mt-6">
+                    <Link href="/pricing" className="inline-flex items-center gap-1.5 text-brand-400 hover:text-brand-300 font-semibold text-sm transition-colors">
+                      See full pricing <ChevronRight size={15} />
+                    </Link>
+                    <p className="text-white/35 text-sm mt-2">Your First Clip Is On Us · 3-day free trial · Paid plans open soon</p>
+                  </div>
+                </section>
+
                 {/* FAQ */}
                 <section className="mt-20 max-w-2xl mx-auto">
                   <h2 className="text-center text-white font-black text-2xl mb-8">Questions</h2>
@@ -303,17 +359,22 @@ export default function Home() {
                       </details>
                     ))}
                   </div>
+                  <div className="text-center mt-6">
+                    <Link href="/faq" className="inline-flex items-center gap-1.5 text-brand-400 hover:text-brand-300 font-semibold text-sm transition-colors">
+                      See all questions <ChevronRight size={15} />
+                    </Link>
+                  </div>
                 </section>
 
                 {/* Closing call to action */}
                 <section className="mt-20 text-center bg-surface-1 border border-white/5 rounded-2xl px-6 py-12">
                   <h2 className="text-white font-black text-2xl sm:text-3xl mb-3">Ready to make your first clips?</h2>
-                  <p className="text-white/40 mb-6">Paste a link at the top of the page and see what it finds.</p>
+                  <p className="text-white/40 mb-6">Your first clip is on us. Paste a link at the top of the page and see what it finds.</p>
                   <button
                     onClick={scrollToTop}
                     className="inline-flex items-center gap-2 px-8 py-4 bg-brand-500 hover:bg-brand-400 text-white font-bold rounded-xl transition-colors glow-brand"
                   >
-                    Start clipping
+                    Get My Free Clip
                     <ChevronRight size={18} />
                   </button>
                 </section>
