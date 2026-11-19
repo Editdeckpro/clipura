@@ -143,37 +143,54 @@ router.get('/:id/download', async (req, res) => {
   await archive.finalize();
 });
 
+// How many clips to render at the same time. More is faster but uses more CPU.
+const MAX_CONCURRENT_CLIPS = 3;
+
 async function generateClips(jobId, inputFile, moments, transcript) {
   const outputDir = path.join(__dirname, '../outputs', jobId);
-  if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
-  const clips = [];
+  // Remove clips from any previous run first, so a remake never leaves stale
+  // files behind that would end up in the downloaded zip.
+  fs.rmSync(outputDir, { recursive: true, force: true });
+  fs.mkdirSync(outputDir, { recursive: true });
+
   const total = moments.length;
+  const clips = new Array(total); // keep results in the original moment order
+  let completed = 0;
+  let nextIndex = 0;
 
-  for (let i = 0; i < moments.length; i++) {
-    const moment = moments[i];
-    const progress = Math.round(((i) / total) * 100);
-    updateJob(jobId, {
-      progress,
-      statusMessage: `Generating clip ${i + 1} of ${total}: "${moment.hook.slice(0, 50)}..."`,
-    });
-
-    try {
-      const outputPath = path.join(outputDir, `clip-${i + 1}-${moment.id.slice(0, 6)}.mp4`);
-      await generateClip({
-        inputFile,
-        outputPath,
-        startTime: moment.startTime,
-        endTime: moment.endTime,
-        transcript,
-        momentId: moment.id,
+  // Each worker pulls the next moment until there are none left. Up to
+  // MAX_CONCURRENT_CLIPS workers run at once.
+  async function worker() {
+    while (true) {
+      const i = nextIndex++;
+      if (i >= total) return;
+      const moment = moments[i];
+      try {
+        const outputPath = path.join(outputDir, `clip-${i + 1}-${moment.id.slice(0, 6)}.mp4`);
+        await generateClip({
+          inputFile,
+          outputPath,
+          startTime: moment.startTime,
+          endTime: moment.endTime,
+          transcript,
+          momentId: moment.id,
+        });
+        clips[i] = { momentId: moment.id, file: path.basename(outputPath), status: 'done' };
+      } catch (err) {
+        console.error(`Clip ${i + 1} error:`, err);
+        clips[i] = { momentId: moment.id, status: 'error', error: err.message };
+      }
+      completed++;
+      updateJob(jobId, {
+        progress: Math.round((completed / total) * 100),
+        statusMessage: `Making clips... ${completed} of ${total} done`,
       });
-      clips.push({ momentId: moment.id, file: path.basename(outputPath), status: 'done' });
-    } catch (err) {
-      console.error(`Clip ${i + 1} error:`, err);
-      clips.push({ momentId: moment.id, status: 'error', error: err.message });
     }
   }
+
+  const workerCount = Math.min(MAX_CONCURRENT_CLIPS, total);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
   updateJob(jobId, {
     status: JOB_STATUS.COMPLETE,
