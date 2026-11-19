@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import Link from 'next/link';
 import {
-  Scissors, ChevronRight, RotateCcw, CheckSquare, Square, Bookmark, Check,
+  ChevronRight, RotateCcw, CheckSquare, Square, Bookmark, Check,
   Radio, Sparkles, Smartphone, SlidersHorizontal, Link2, Download, Search, Loader2,
 } from 'lucide-react';
 import UploadZone from '@/components/UploadZone';
@@ -33,7 +34,7 @@ const FEATURES = [
 
 const FAQ = [
   { q: 'What can I clip?', a: 'YouTube, Twitch, and Kick links (finished videos and streams that are live right now), and files you upload (MP4, MOV, MKV, WEBM, MP3, WAV and more).' },
-  { q: 'How does live clipping work?', a: 'Paste the link to a stream while it is live. Clip Factory grabs the last 10 minutes and finds the best moments in it.' },
+  { q: 'How does live clipping work?', a: 'Paste the link to a stream while it is live. Clipura grabs the last 10 minutes and finds the best moments in it.' },
   { q: 'How does it pick the moments?', a: 'It reads what is being said and scores each moment for how shareable it is. Videos with someone talking give the best results.' },
   { q: 'How long does it take?', a: 'Most videos are ready to review in a few minutes. Longer videos take longer.' },
 ];
@@ -150,18 +151,21 @@ export default function Home() {
       <header className="border-b border-white/5 bg-surface-1/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
           <button
-            onClick={() => setView('workflow')}
-            className="flex items-center gap-3"
+            onClick={() => { setView('workflow'); }}
+            className="flex items-center"
+            aria-label="Clipura home"
           >
-            <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center">
-              <Scissors size={16} className="text-white" />
-            </div>
-            <span className="font-black text-white text-lg tracking-tight">
-              CLIP<span className="text-brand-500">FACTORY</span>
-            </span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/clipura-logo.png" alt="Clipura" className="h-8 w-auto" />
           </button>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1 sm:gap-3">
+            <Link href="/pricing" className="hidden sm:inline text-sm font-medium text-white/50 hover:text-white px-3 py-1.5 transition-colors">
+              Pricing
+            </Link>
+            <Link href="/faq" className="hidden sm:inline text-sm font-medium text-white/50 hover:text-white px-3 py-1.5 transition-colors">
+              FAQ
+            </Link>
             <button
               onClick={() => setView('library')}
               className={`flex items-center gap-2 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${
@@ -240,7 +244,7 @@ export default function Home() {
                     into <span className="text-brand-500">clips worth posting</span>
                   </h1>
                   <p className="text-white/50 text-lg sm:text-xl max-w-2xl mx-auto">
-                    Paste a link. Clip Factory finds the best moments, cuts them vertical,
+                    Paste a link. Clipura finds the best moments, cuts them vertical,
                     and adds captions. Ready for TikTok, Reels, and Shorts.
                   </p>
                 </div>
@@ -477,7 +481,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-white/5">
         <div className="max-w-5xl mx-auto px-6 py-6 flex items-center justify-between flex-wrap gap-2 text-sm text-white/30">
-          <span>Clip Factory</span>
+          <span>Clipura</span>
           <span>Clips for TikTok, Reels, and Shorts</span>
         </div>
       </footer>

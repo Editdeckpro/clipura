@@ -7,7 +7,7 @@ interface Props {
   onChange: (value: LayoutOptions) => void;
 }
 
-const BRAND = '#ff4d00';
+const BRAND = '#8b2ff5';
 const MUTED = 'rgba(255,255,255,0.10)';
 const MUTED_2 = 'rgba(255,255,255,0.22)';
 

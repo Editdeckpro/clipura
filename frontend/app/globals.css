@@ -5,14 +5,16 @@
 @tailwind utilities;
 
 :root {
-  --brand: #ff4d00;
-  --brand-dim: #cc3d00;
+  --brand: #8b2ff5;
+  --brand-dim: #7a1fe0;
+  --gold: #eda50a;
+  --gold-bright: #fed224;
   --surface: #0d0f1a;
   --surface-1: #12141f;
   --surface-2: #1a1d2e;
   --surface-3: #22263a;
   --border: rgba(255,255,255,0.07);
-  --border-hover: rgba(255,77,0,0.4);
+  --border-hover: rgba(139,47,245,0.4);
 }
 
 * {
@@ -48,10 +50,13 @@ body {
 
 /* Glow utilities */
 .glow-brand {
-  box-shadow: 0 0 20px rgba(255, 77, 0, 0.25), 0 0 40px rgba(255, 77, 0, 0.1);
+  box-shadow: 0 0 20px rgba(139, 47, 245, 0.3), 0 0 40px rgba(139, 47, 245, 0.12);
 }
 .glow-brand-sm {
-  box-shadow: 0 0 10px rgba(255, 77, 0, 0.2);
+  box-shadow: 0 0 10px rgba(139, 47, 245, 0.25);
+}
+.glow-gold {
+  box-shadow: 0 0 20px rgba(237, 165, 10, 0.25), 0 0 40px rgba(237, 165, 10, 0.1);
 }
 
 /* Score ring animation */
@@ -77,5 +82,5 @@ body {
 /* Drag over state */
 .drag-active {
   border-color: var(--brand) !important;
-  background: rgba(255, 77, 0, 0.05) !important;
+  background: rgba(139, 47, 245, 0.05) !important;
 }

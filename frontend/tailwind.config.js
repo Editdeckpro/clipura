@@ -4,17 +4,31 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // Primary accent: purple, taken from the Clipura logo mark.
         brand: {
-          50: '#fff4ed',
-          100: '#ffe8d5',
-          200: '#ffc89a',
-          300: '#ffa05e',
-          400: '#ff6e28',
-          500: '#ff4d00',
-          600: '#e63900',
-          700: '#bf2800',
-          800: '#991e00',
-          900: '#7a1800',
+          50: '#f6f2ff',
+          100: '#eadcff',
+          200: '#d4bbff',
+          300: '#b98cff',
+          400: '#9f5bff',
+          500: '#8b2ff5',
+          600: '#7a1fe0',
+          700: '#6417bb',
+          800: '#4f1596',
+          900: '#3a0b74',
+        },
+        // Second accent: gold, taken from the logo's play triangle and wordmark.
+        gold: {
+          50: '#fff9e6',
+          100: '#fdefbf',
+          200: '#fbdf86',
+          300: '#facc4d',
+          400: '#f6bb24',
+          500: '#eda50a',
+          600: '#c9850a',
+          700: '#9f6410',
+          800: '#7e4f14',
+          900: '#684015',
         },
         surface: {
           DEFAULT: '#0d0f1a',

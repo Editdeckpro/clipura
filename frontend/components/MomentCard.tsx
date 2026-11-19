@@ -28,7 +28,7 @@ function ScoreRing({ score }: { score: number }) {
   const radius = 20;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 100) * circumference;
-  const color = score >= 80 ? '#22c55e' : score >= 60 ? '#ff4d00' : '#facc15';
+  const color = score >= 80 ? '#22c55e' : score >= 60 ? '#8b2ff5' : '#facc15';
 
   return (
     <div className="relative w-14 h-14 flex-shrink-0">
@@ -252,7 +252,7 @@ export default function MomentCard({ moment, selected, onToggle, onUpdate, index
                     value={startAdj}
                     onChange={e => handleStartAdj(parseFloat(e.target.value))}
                     className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-brand-500"
-                    style={{ background: `linear-gradient(to right, #ff4d00 0%, #ff4d00 ${((startAdj + ADJUST_RANGE) / (ADJUST_RANGE * 2)) * 100}%, rgba(255,255,255,0.1) ${((startAdj + ADJUST_RANGE) / (ADJUST_RANGE * 2)) * 100}%, rgba(255,255,255,0.1) 100%)` }}
+                    style={{ background: `linear-gradient(to right, #8b2ff5 0%, #8b2ff5 ${((startAdj + ADJUST_RANGE) / (ADJUST_RANGE * 2)) * 100}%, rgba(255,255,255,0.1) ${((startAdj + ADJUST_RANGE) / (ADJUST_RANGE * 2)) * 100}%, rgba(255,255,255,0.1) 100%)` }}
                   />
                   <div className="flex justify-between text-xs text-white/20 mt-1">
                     <span>-{ADJUST_RANGE}s</span>
@@ -276,7 +276,7 @@ export default function MomentCard({ moment, selected, onToggle, onUpdate, index
                     value={endAdj}
                     onChange={e => handleEndAdj(parseFloat(e.target.value))}
                     className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-brand-500"
-                    style={{ background: `linear-gradient(to right, #ff4d00 0%, #ff4d00 ${((endAdj + ADJUST_RANGE) / (ADJUST_RANGE * 2)) * 100}%, rgba(255,255,255,0.1) ${((endAdj + ADJUST_RANGE) / (ADJUST_RANGE * 2)) * 100}%, rgba(255,255,255,0.1) 100%)` }}
+                    style={{ background: `linear-gradient(to right, #8b2ff5 0%, #8b2ff5 ${((endAdj + ADJUST_RANGE) / (ADJUST_RANGE * 2)) * 100}%, rgba(255,255,255,0.1) ${((endAdj + ADJUST_RANGE) / (ADJUST_RANGE * 2)) * 100}%, rgba(255,255,255,0.1) 100%)` }}
                   />
                   <div className="flex justify-between text-xs text-white/20 mt-1">
                     <span>-{ADJUST_RANGE}s</span>

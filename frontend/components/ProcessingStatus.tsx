@@ -127,7 +127,7 @@ export default function ProcessingStatus({ jobId, onReady, onError }: Props) {
               <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="2.5" />
               <circle
                 cx="18" cy="18" r="15.9" fill="none"
-                stroke="#ff4d00" strokeWidth="2.5" strokeLinecap="round"
+                stroke="#8b2ff5" strokeWidth="2.5" strokeLinecap="round"
                 strokeDasharray={`${job.progress} ${100 - job.progress}`}
                 strokeDashoffset="25"
                 className="transition-all duration-500"

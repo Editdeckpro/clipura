@@ -9,5 +9,7 @@ backend/data/
 frontend/.next/
 *.tsbuildinfo
 *.log
+# raw logo working folder (processed assets live in frontend/public and brand/)
+/logo/
 .DS_Store
 Thumbs.db
