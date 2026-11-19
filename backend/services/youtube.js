@@ -6,7 +6,7 @@ const YTDlpWrap = require('yt-dlp-wrap').default;
 
 if (process.env.FFMPEG_PATH) ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH);
 
-const BIN_DIR = path.join(__dirname, '..', 'bin');
+const { BIN_DIR } = require('../config/paths');
 const BINARY = path.join(BIN_DIR, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
 // ---- Settings you can tweak -------------------------------------------------

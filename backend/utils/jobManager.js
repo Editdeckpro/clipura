@@ -6,7 +6,7 @@ const path = require('path');
 // does not lose finished moment lists or finished clips.
 const jobs = new Map();
 
-const DATA_DIR = path.join(__dirname, '..', 'data', 'jobs');
+const DATA_DIR = path.join(require('../config/paths').DATA_DIR, 'jobs');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const JOB_STATUS = {

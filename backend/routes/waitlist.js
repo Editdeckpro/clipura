@@ -4,7 +4,7 @@ const path = require('path');
 
 const router = express.Router();
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
+const { DATA_DIR } = require('../config/paths');
 const FILE = path.join(DATA_DIR, 'waitlist.jsonl');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 

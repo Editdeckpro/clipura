@@ -12,6 +12,7 @@ import MomentCard from '@/components/MomentCard';
 import ClipGenerator from '@/components/ClipGenerator';
 import SavedClips from '@/components/SavedClips';
 import LayoutPicker from '@/components/LayoutPicker';
+import AccessGate from '@/components/AccessGate';
 import { Job, MomentOverride, refindMoments, LayoutOptions, DEFAULT_LAYOUT } from '@/lib/api';
 
 const LAYOUT_STORAGE_KEY = 'clip-factory:layout';
@@ -146,6 +147,7 @@ export default function Home() {
   const showSteps = view === 'workflow' && stage !== 'upload';
 
   return (
+    <AccessGate>
     <div className="min-h-screen bg-surface flex flex-col">
       {/* Header */}
       <header className="border-b border-white/5 bg-surface-1/80 backdrop-blur-sm sticky top-0 z-50">
@@ -547,5 +549,6 @@ export default function Home() {
         </div>
       </footer>
     </div>
+    </AccessGate>
   );
 }

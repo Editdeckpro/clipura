@@ -2,15 +2,28 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const ffmpeg = require('fluent-ffmpeg');
 const { createJob, updateJob, JOB_STATUS, createAbort, clearAbort } = require('../utils/jobManager');
 const { downloadYouTube } = require('../services/youtube');
 const { transcribeAudio } = require('../services/transcription');
 const { analyzeMoments } = require('../services/claude');
+const usage = require('../utils/usage');
+const { UPLOADS_DIR } = require('../config/paths');
+
+// Minutes of source video in a file, for the daily processing cap. Best effort.
+function durationMinutes(file) {
+  return new Promise(resolve => {
+    ffmpeg.ffprobe(file, (err, data) => {
+      const secs = data && data.format && data.format.duration;
+      resolve(err || !secs ? 0 : secs / 60);
+    });
+  });
+}
 
 const router = express.Router();
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads')),
+  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
     cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
@@ -85,7 +98,7 @@ router.post('/youtube', async (req, res) => {
 });
 
 async function processYouTubeJob(jobId, url, liveMinutes) {
-  const outputPath = path.join(__dirname, '../uploads', `${jobId}.mp4`);
+  const outputPath = path.join(UPLOADS_DIR, `${jobId}.mp4`);
   const controller = createAbort(jobId); // lets the Cancel button stop a recording
 
   // Step 1: get the video/stream. If this fails, show a short plain message and
@@ -128,6 +141,17 @@ async function processYouTubeJob(jobId, url, liveMinutes) {
 
 async function processJob(jobId, filePath) {
   try {
+    // Daily processing cap: protects spend. Counts minutes of source video per day.
+    const minutes = await durationMinutes(filePath);
+    if (usage.wouldExceed(minutes)) {
+      updateJob(jobId, {
+        status: JOB_STATUS.ERROR,
+        error: "The demo has reached today's limit. Please try again tomorrow.",
+      });
+      return;
+    }
+    usage.addMinutes(minutes);
+
     updateJob(jobId, { status: JOB_STATUS.TRANSCRIBING, progress: 25, statusMessage: 'Listening to the video...' });
     const transcript = await transcribeAudio(filePath);
     updateJob(jobId, { transcript, progress: 60, statusMessage: 'Picking the best moments...' });

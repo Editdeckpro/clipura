@@ -5,6 +5,8 @@ const archiver = require('archiver');
 const { getJob, updateJob, JOB_STATUS, abortJob } = require('../utils/jobManager');
 const { generateClip } = require('../services/ffmpeg');
 const { analyzeMoments } = require('../services/claude');
+const { requireAccess } = require('../utils/access');
+const { OUTPUTS_DIR } = require('../config/paths');
 
 const router = express.Router();
 
@@ -55,7 +57,7 @@ router.get('/:id/stream', (req, res) => {
 // GET /api/jobs/:id/clips/:filename - serve a generated clip for in-browser preview
 router.get('/:id/clips/:filename', (req, res) => {
   const safeFilename = path.basename(req.params.filename);
-  const filePath = path.join(__dirname, '../outputs', req.params.id, safeFilename);
+  const filePath = path.join(OUTPUTS_DIR, req.params.id, safeFilename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Clip not found' });
   res.sendFile(filePath);
 });
@@ -71,7 +73,7 @@ router.post('/:id/cancel', (req, res) => {
 // POST /api/jobs/:id/refind - re-run the moment picker on the saved transcript.
 // Optional body: { guidance } - what the user is looking for. Avoids moments already
 // shown and replaces the list. No re-download or re-transcription.
-router.post('/:id/refind', async (req, res) => {
+router.post('/:id/refind', requireAccess, async (req, res) => {
   const job = getJob(req.params.id);
   if (!job) return res.status(404).json({ error: 'Job not found' });
   if (!job.transcript) {
@@ -101,7 +103,7 @@ router.post('/:id/refind', async (req, res) => {
 });
 
 // POST /api/jobs/:id/generate - generate selected clips
-router.post('/:id/generate', async (req, res) => {
+router.post('/:id/generate', requireAccess, async (req, res) => {
   const job = getJob(req.params.id);
   if (!job) return res.status(404).json({ error: 'Job not found' });
   if (job.status !== JOB_STATUS.READY && job.status !== JOB_STATUS.COMPLETE) {
@@ -141,7 +143,7 @@ router.get('/:id/download', async (req, res) => {
     return res.status(400).json({ error: 'Clips not ready yet' });
   }
 
-  const outputDir = path.join(__dirname, '../outputs', req.params.id);
+  const outputDir = path.join(OUTPUTS_DIR, req.params.id);
   if (!fs.existsSync(outputDir)) {
     return res.status(404).json({ error: 'Output directory not found' });
   }
@@ -161,7 +163,7 @@ router.get('/:id/download', async (req, res) => {
 const MAX_CONCURRENT_CLIPS = 3;
 
 async function generateClips(jobId, inputFile, moments, transcript, layout) {
-  const outputDir = path.join(__dirname, '../outputs', jobId);
+  const outputDir = path.join(OUTPUTS_DIR, jobId);
 
   // Remove clips from any previous run first, so a remake never leaves stale
   // files behind that would end up in the downloaded zip.

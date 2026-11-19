@@ -7,6 +7,28 @@ export const api = axios.create({
   timeout: 300_000,
 });
 
+// ─── Access code (private demo gate) ─────────────────────────────────────────
+const ACCESS_KEY = 'clip-factory:access-code';
+
+export function getAccessCode(): string {
+  try { return localStorage.getItem(ACCESS_KEY) || ''; } catch { return ''; }
+}
+export function setAccessCode(code: string) {
+  try { localStorage.setItem(ACCESS_KEY, code); } catch {}
+}
+
+// Attach the stored access code to every API request.
+api.interceptors.request.use(cfg => {
+  const code = getAccessCode();
+  if (code) cfg.headers['x-access-code'] = code;
+  return cfg;
+});
+
+export async function getConfig(): Promise<{ accessRequired: boolean; valid: boolean }> {
+  const res = await api.get<{ accessRequired: boolean; valid: boolean }>('/config');
+  return res.data;
+}
+
 export async function uploadFile(file: File, onProgress?: (pct: number) => void) {
   const form = new FormData();
   form.append('file', file);

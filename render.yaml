@@ -1,23 +1,30 @@
 services:
   - type: web
-    name: clip-factory-backend
+    name: clipura-backend
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    plan: starter          # $7/month — upgrade to standard for production load
+    plan: starter          # $7/month — upgrade to standard for heavier load
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 3001
+      # Persistent data lives on the mounted disk so jobs and clips survive restarts.
+      - key: DATA_DIR
+        value: /var/data
       - key: OPENAI_API_KEY
-        sync: false        # set manually in Render dashboard — never commit keys
+        sync: false        # set manually in the Render dashboard — never commit keys
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: FRONTEND_URL
-        sync: false        # set to your Vercel URL after frontend deploys
+        sync: false        # set to your Vercel URL after the frontend deploys
+      - key: ACCESS_CODE
+        sync: false        # the code you give testers (set in the dashboard)
+      - key: DAILY_PROCESSING_MINUTES
+        value: 180         # max minutes of source video processed per day
     disk:
-      name: clip-factory-data
-      mountPath: /app
-      sizeGB: 10           # $2.50/month — persists uploads, outputs, yt-dlp binary
+      name: clipura-data
+      mountPath: /var/data # persists uploads, outputs, data (jobs), yt-dlp binary
+      sizeGB: 10           # ~$2.50/month

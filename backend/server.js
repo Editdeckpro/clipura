@@ -8,14 +8,16 @@ const rateLimit = require('express-rate-limit');
 const uploadRoutes = require('./routes/upload');
 const jobRoutes = require('./routes/jobs');
 const waitlistRoutes = require('./routes/waitlist');
+const { requireAccess } = require('./utils/access');
+const { UPLOADS_DIR, OUTPUTS_DIR, TEMP_DIR } = require('./config/paths');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 // ── Ensure required directories exist ──────────────────────────────────────────
-['uploads', 'outputs', 'temp'].forEach(dir => {
-  fs.mkdirSync(path.join(__dirname, dir), { recursive: true });
+[UPLOADS_DIR, OUTPUTS_DIR, TEMP_DIR].forEach(dir => {
+  fs.mkdirSync(dir, { recursive: true });
 });
 
 // ── CORS ────────────────────────────────────────────────────────────────────────
@@ -60,10 +62,23 @@ app.use('/api/', apiLimiter);
 app.use('/api/upload', uploadLimiter);
 
 // ── Static: serve outputs ──────────────────────────────────────────────────────
-app.use('/outputs', express.static(path.join(__dirname, 'outputs')));
+app.use('/outputs', express.static(OUTPUTS_DIR));
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
-app.use('/api/upload', uploadRoutes);
+// Public config so the frontend knows whether to show the access-code gate, and
+// can validate a code the visitor typed (sent as the x-access-code header).
+app.get('/api/config', (req, res) => {
+  const code = process.env.ACCESS_CODE;
+  res.json({
+    accessRequired: !!code,
+    valid: code ? req.get('x-access-code') === code : true,
+  });
+});
+
+// The access code gates the endpoints that cost money/CPU (starting a job).
+// Read-only endpoints (serving clips, progress) stay open so the browser's
+// <video> tag and progress stream work without custom headers.
+app.use('/api/upload', requireAccess, uploadRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/waitlist', waitlistRoutes);
 
@@ -108,9 +123,9 @@ function cleanOldFiles(dir, maxAgeMs) {
 }
 
 setInterval(() => {
-  cleanOldFiles(path.join(__dirname, 'uploads'), UPLOAD_RETENTION_MS);
-  cleanOldFiles(path.join(__dirname, 'temp'), UPLOAD_RETENTION_MS);
-  cleanOldFiles(path.join(__dirname, 'outputs'), CLIP_RETENTION_MS);
+  cleanOldFiles(UPLOADS_DIR, UPLOAD_RETENTION_MS);
+  cleanOldFiles(TEMP_DIR, UPLOAD_RETENTION_MS);
+  cleanOldFiles(OUTPUTS_DIR, CLIP_RETENTION_MS);
 }, HOUR_MS).unref();
 
 // ── Start ──────────────────────────────────────────────────────────────────────
