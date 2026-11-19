@@ -357,7 +357,14 @@ export default function Home() {
                   selectedMoments={selectedMoments}
                   overrides={momentOverrides}
                 />
-                <div className="mt-8 text-center">
+                <div className="mt-8 flex flex-col items-center gap-3">
+                  <button
+                    onClick={() => setStage('select')}
+                    className="inline-flex items-center gap-2 text-sm text-white/60 hover:text-white transition-colors"
+                  >
+                    <RotateCcw size={14} />
+                    Back to pick clips
+                  </button>
                   <button onClick={reset} className="text-sm text-white/30 hover:text-white/60 transition-colors">
                     Clip another video
                   </button>

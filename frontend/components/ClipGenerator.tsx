@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Download, Loader2, CheckCircle2, XCircle, Package,
-  Play, Pause, BookmarkPlus, BookmarkCheck, RotateCcw,
+  Play, Pause, BookmarkCheck, RotateCcw,
 } from 'lucide-react';
 import {
   generateClips, getJob, getDownloadUrl, getClipUrl,
@@ -72,7 +72,7 @@ export default function ClipGenerator({ job, selectedMoments, overrides }: Props
     return () => { cancelled = true; clearInterval(interval); };
   }, [generating, job.id]);
 
-  const handleSave = (clipFile: string, momentId: string) => {
+  const persistClip = useCallback((clipFile: string, momentId: string) => {
     const moment = job.moments?.find(m => m.id === momentId);
     const override = overrides?.[momentId];
     const id = `${job.id}-${momentId}`;
@@ -87,7 +87,15 @@ export default function ClipGenerator({ job, selectedMoments, overrides }: Props
       viralScore: moment?.viralScore || 0,
     });
     setSavedIds(prev => { const next = new Set(Array.from(prev)); next.add(id); return next; });
-  };
+  }, [job, overrides]);
+
+  // Every finished clip is kept in My Clips automatically - no Save click needed.
+  useEffect(() => {
+    if (currentJob.status !== 'complete') return;
+    (currentJob.clips || [])
+      .filter(c => c.status === 'done' && c.file)
+      .forEach(c => persistClip(c.file!, c.momentId));
+  }, [currentJob.status, currentJob.clips, persistClip]);
 
   if (error) {
     return (
@@ -162,7 +170,7 @@ export default function ClipGenerator({ job, selectedMoments, overrides }: Props
               {successClips.length} Clip{successClips.length !== 1 ? 's' : ''} Ready
             </h2>
             <p className="text-white/40 text-sm">
-              Vertical 9:16 with captions
+              Vertical 9:16 with captions · Saved to My Clips automatically
               {failedClips.length > 0 && (
                 <span className="text-yellow-400/70"> · {failedClips.length} failed</span>
               )}
@@ -227,18 +235,13 @@ export default function ClipGenerator({ job, selectedMoments, overrides }: Props
                     <Download size={15} />
                     Download
                   </a>
-                  <button
-                    onClick={() => handleSave(clip.file, clip.momentId)}
-                    title={isSaved ? 'Saved to library' : 'Save to library'}
-                    className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
-                      isSaved
-                        ? 'bg-green-500/10 border-green-500/20 text-green-400'
-                        : 'bg-white/5 border-white/10 text-white/50 hover:text-white hover:border-white/20'
-                    }`}
+                  <span
+                    title="This clip is in My Clips"
+                    className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm font-medium bg-green-500/10 border-green-500/20 text-green-400"
                   >
-                    {isSaved ? <BookmarkCheck size={15} /> : <BookmarkPlus size={15} />}
-                    {isSaved ? 'Saved' : 'Save'}
-                  </button>
+                    <BookmarkCheck size={15} />
+                    {isSaved ? 'Saved' : 'Saving'}
+                  </span>
                 </div>
               </div>
             </div>

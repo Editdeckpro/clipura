@@ -21,6 +21,17 @@ WHAT MAKES A GREAT CLIP:
 - A funny, hype, or shocking reaction
 - A quotable, memorable line
 
+WHAT TO SKIP (never return these as moments):
+- Ads, sponsor reads, and anything reading out a promo code or discount link
+- Channel intros and outros
+- "Like and subscribe", "follow me", "hit the bell", and other calls to follow or subscribe
+- Dead air, long silences, filler, and stretches where nothing much is said
+
+QUALITY OVER QUANTITY:
+Only return moments that are genuinely strong on their own. If just a few parts of the
+video are good, return just those few - even one or two. Never pad the list with weak
+moments to reach a number.
+
 CLIP LENGTH: 30-90 seconds is ideal. Avoid clips over 2 minutes.
 Each clip must start and end on a complete thought.
 
@@ -75,7 +86,9 @@ async function analyzeMoments(transcript) {
     throw new Error('Not enough talking was found in this video to pick clips. Try a video with more speech.');
   }
 
-  const prompt = `Analyze this transcript and identify the 4-6 best viral moments for short-form clips.
+  const prompt = `Analyze this transcript and identify the best viral moments for short-form clips - up to 6.
+Return fewer if only a few are genuinely strong. Skip ads, sponsor reads, promo codes, intros,
+outros, "like and subscribe" calls, and dead air.
 
 TRANSCRIPT:
 ${transcriptText}
