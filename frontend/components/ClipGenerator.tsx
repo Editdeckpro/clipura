@@ -6,7 +6,7 @@ import {
   Play, Pause, BookmarkCheck, RotateCcw,
 } from 'lucide-react';
 import {
-  generateClips, getJob, getDownloadUrl, getClipUrl,
+  generateClips, getJob, getDownloadUrl, getClipUrl, getClipDownloadUrl,
   saveClip, getSavedClips,
   Job, MomentOverride, LayoutOptions,
 } from '@/lib/api';
@@ -256,7 +256,7 @@ export default function ClipGenerator({ job, selectedMoments, overrides, layout,
                 </p>
                 <div className="flex items-center gap-2">
                   <a
-                    href={getClipUrl(currentJob.id, clip.file)}
+                    href={getClipDownloadUrl(currentJob.id, clip.file)}
                     download={clip.file}
                     className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-500 hover:bg-brand-400 text-white font-semibold rounded-xl transition-colors text-sm"
                   >

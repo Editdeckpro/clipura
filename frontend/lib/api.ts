@@ -82,6 +82,11 @@ export function getClipUrl(jobId: string, filename: string) {
   return `${API_URL}/api/jobs/${jobId}/clips/${encodeURIComponent(filename)}`;
 }
 
+// Forces a download (save) even when the site and backend are on different domains.
+export function getClipDownloadUrl(jobId: string, filename: string) {
+  return `${getClipUrl(jobId, filename)}?download=1`;
+}
+
 // ─── Saved Clips (localStorage) ───────────────────────────────────────────────
 
 const SAVED_CLIPS_KEY = 'clip-factory:saved-clips';

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Download, Trash2, Play, Film, Bookmark, Clock } from 'lucide-react';
-import { getSavedClips, deleteSavedClip, getClipUrl, SavedClip } from '@/lib/api';
+import { getSavedClips, deleteSavedClip, getClipUrl, getClipDownloadUrl, SavedClip } from '@/lib/api';
 
 type Availability = 'checking' | 'available' | 'expired';
 
@@ -177,7 +177,7 @@ export default function SavedClips() {
                     <Play size={14} />
                   </button>
                   <a
-                    href={clipUrl}
+                    href={getClipDownloadUrl(clip.jobId, clip.filename)}
                     download={clip.filename}
                     title="Download"
                     className="p-2 rounded-lg border bg-white/5 border-white/8 text-white/40 hover:text-white hover:border-white/20 transition-colors"

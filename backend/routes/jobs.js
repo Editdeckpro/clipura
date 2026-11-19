@@ -59,6 +59,9 @@ router.get('/:id/clips/:filename', (req, res) => {
   const safeFilename = path.basename(req.params.filename);
   const filePath = path.join(OUTPUTS_DIR, req.params.id, safeFilename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Clip not found' });
+  // ?download=1 forces a save (works even when the site is on another domain).
+  // Without it the file plays inline for the preview player.
+  if (req.query.download) res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
   res.sendFile(filePath);
 });
 
