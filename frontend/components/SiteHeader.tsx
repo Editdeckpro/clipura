@@ -10,9 +10,9 @@ export default function SiteHeader() {
         </Link>
 
         <nav className="flex items-center gap-1 sm:gap-2 text-sm font-medium">
-          <Link href="/" className="text-white/50 hover:text-white px-3 py-1.5 transition-colors">Home</Link>
-          <Link href="/pricing" className="text-white/50 hover:text-white px-3 py-1.5 transition-colors">Pricing</Link>
-          <Link href="/faq" className="text-white/50 hover:text-white px-3 py-1.5 transition-colors">FAQ</Link>
+          <Link href="/" className="hidden sm:inline text-white/50 hover:text-white px-3 py-1.5 transition-colors">Home</Link>
+          <Link href="/pricing" className="hidden sm:inline text-white/50 hover:text-white px-3 py-1.5 transition-colors">Pricing</Link>
+          <Link href="/faq" className="hidden sm:inline text-white/50 hover:text-white px-3 py-1.5 transition-colors">FAQ</Link>
           <Link
             href="/"
             className="ml-1 sm:ml-2 px-4 py-2 bg-brand-500 hover:bg-brand-400 text-white font-semibold rounded-xl transition-colors"

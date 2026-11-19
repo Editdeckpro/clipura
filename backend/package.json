@@ -7,6 +7,16 @@
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
+  "nodemonConfig": {
+    "ignore": [
+      "data/*",
+      "uploads/*",
+      "outputs/*",
+      "temp/*",
+      "bin/*"
+    ],
+    "ext": "js,json"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.0",
     "@distube/ytdl-core": "^4.16.0",
