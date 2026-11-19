@@ -32,9 +32,10 @@ export async function getJob(jobId: string) {
 export async function generateClips(
   jobId: string,
   selectedMoments: string[],
-  momentOverrides?: Record<string, MomentOverride>
+  momentOverrides?: Record<string, MomentOverride>,
+  layout?: LayoutOptions
 ) {
-  await api.post(`/jobs/${jobId}/generate`, { selectedMoments, momentOverrides });
+  await api.post(`/jobs/${jobId}/generate`, { selectedMoments, momentOverrides, layout });
 }
 
 export async function refindMoments(jobId: string, guidance?: string) {
@@ -73,6 +74,24 @@ export function deleteSavedClip(id: string) {
 }
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
+
+export type LayoutType = 'fill' | 'fit' | 'split' | 'wide';
+export type FaceCamCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+export type FaceCamSize = 'small' | 'medium' | 'large';
+
+export interface LayoutOptions {
+  type: LayoutType;
+  captions: boolean;
+  faceCamCorner: FaceCamCorner;
+  faceCamSize: FaceCamSize;
+}
+
+export const DEFAULT_LAYOUT: LayoutOptions = {
+  type: 'fill',
+  captions: true,
+  faceCamCorner: 'top-right',
+  faceCamSize: 'medium',
+};
 
 export interface MomentOverride {
   startTime?: number;

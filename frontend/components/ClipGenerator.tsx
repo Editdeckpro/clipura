@@ -8,16 +8,18 @@ import {
 import {
   generateClips, getJob, getDownloadUrl, getClipUrl,
   saveClip, getSavedClips,
-  Job, MomentOverride,
+  Job, MomentOverride, LayoutOptions,
 } from '@/lib/api';
 
 interface Props {
   job: Job;
   selectedMoments: string[];
   overrides?: Record<string, MomentOverride>;
+  layout?: LayoutOptions;
+  onGeneratingChange?: (generating: boolean) => void;
 }
 
-export default function ClipGenerator({ job, selectedMoments, overrides }: Props) {
+export default function ClipGenerator({ job, selectedMoments, overrides, layout, onGeneratingChange }: Props) {
   const [generating, setGenerating] = useState(true);
   const [hasProgress, setHasProgress] = useState(false);
   const [currentJob, setCurrentJob] = useState<Job>(job);
@@ -36,12 +38,12 @@ export default function ClipGenerator({ job, selectedMoments, overrides }: Props
     setHasProgress(false);
     setGenerating(true);
     try {
-      await generateClips(job.id, selectedMoments, overrides);
+      await generateClips(job.id, selectedMoments, overrides, layout);
     } catch (err: any) {
       setError(err?.response?.data?.error || err?.message || 'Failed to start generation');
       setGenerating(false);
     }
-  }, [job.id, selectedMoments, overrides]);
+  }, [job.id, selectedMoments, overrides, layout]);
 
   // Start as soon as this screen opens - no second "Generate" click needed.
   useEffect(() => {
@@ -49,6 +51,12 @@ export default function ClipGenerator({ job, selectedMoments, overrides }: Props
     requestedRef.current = true;
     startGeneration();
   }, [startGeneration]);
+
+  // Let the page know whether clips are still being made, so it can hide the
+  // "Back to pick clips" link until they finish or fail.
+  useEffect(() => {
+    onGeneratingChange?.(generating);
+  }, [generating, onGeneratingChange]);
 
   // While clips are being made, check on progress every 1.5 seconds.
   useEffect(() => {

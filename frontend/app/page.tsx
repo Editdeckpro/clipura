@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Scissors, ChevronRight, RotateCcw, CheckSquare, Square, Bookmark, Check,
   Radio, Sparkles, Smartphone, SlidersHorizontal, Link2, Download, Search, Loader2,
@@ -10,7 +10,10 @@ import ProcessingStatus from '@/components/ProcessingStatus';
 import MomentCard from '@/components/MomentCard';
 import ClipGenerator from '@/components/ClipGenerator';
 import SavedClips from '@/components/SavedClips';
-import { Job, MomentOverride, refindMoments } from '@/lib/api';
+import LayoutPicker from '@/components/LayoutPicker';
+import { Job, MomentOverride, refindMoments, LayoutOptions, DEFAULT_LAYOUT } from '@/lib/api';
+
+const LAYOUT_STORAGE_KEY = 'clip-factory:layout';
 
 type Stage = 'upload' | 'processing' | 'select' | 'generate';
 type View = 'workflow' | 'library';
@@ -46,6 +49,21 @@ export default function Home() {
   const [refindQuery, setRefindQuery] = useState('');
   const [refinding, setRefinding] = useState(false);
   const [refindMessage, setRefindMessage] = useState('');
+  const [layoutOptions, setLayoutOptions] = useState<LayoutOptions>(DEFAULT_LAYOUT);
+  const [clipsGenerating, setClipsGenerating] = useState(false);
+
+  // Remember the last layout choice in the browser and reload it next time.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LAYOUT_STORAGE_KEY);
+      if (saved) setLayoutOptions({ ...DEFAULT_LAYOUT, ...JSON.parse(saved) });
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layoutOptions));
+    } catch {}
+  }, [layoutOptions]);
 
   const handleJobCreated = useCallback((id: string) => {
     setJobId(id);
@@ -104,6 +122,13 @@ export default function Home() {
     } finally {
       setRefinding(false);
     }
+  };
+
+  // Go to the clips screen. Assume generation is running so the back link stays
+  // hidden until ClipGenerator reports it has finished (or failed).
+  const goToGenerate = () => {
+    setClipsGenerating(true);
+    setStage('generate');
   };
 
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -336,7 +361,7 @@ export default function Home() {
                       <Square size={15} /> None
                     </button>
                     <button
-                      onClick={() => setStage('generate')}
+                      onClick={goToGenerate}
                       disabled={selectedMoments.length === 0}
                       className="flex items-center gap-2 px-5 py-2.5 bg-brand-500 hover:bg-brand-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors text-sm"
                     >
@@ -344,6 +369,11 @@ export default function Home() {
                       <ChevronRight size={16} />
                     </button>
                   </div>
+                </div>
+
+                {/* Layout + captions for this batch */}
+                <div className="mb-6">
+                  <LayoutPicker value={layoutOptions} onChange={setLayoutOptions} />
                 </div>
 
                 {/* Find different moments */}
@@ -419,15 +449,20 @@ export default function Home() {
                   job={job}
                   selectedMoments={selectedMoments}
                   overrides={momentOverrides}
+                  layout={layoutOptions}
+                  onGeneratingChange={setClipsGenerating}
                 />
                 <div className="mt-8 flex flex-col items-center gap-3">
-                  <button
-                    onClick={() => setStage('select')}
-                    className="inline-flex items-center gap-2 text-sm text-white/60 hover:text-white transition-colors"
-                  >
-                    <RotateCcw size={14} />
-                    Back to pick clips
-                  </button>
+                  {/* Only offer going back once the clips have finished (or failed). */}
+                  {!clipsGenerating && (
+                    <button
+                      onClick={() => setStage('select')}
+                      className="inline-flex items-center gap-2 text-sm text-white/60 hover:text-white transition-colors"
+                    >
+                      <RotateCcw size={14} />
+                      Back to pick clips
+                    </button>
+                  )}
                   <button onClick={reset} className="text-sm text-white/30 hover:text-white/60 transition-colors">
                     Clip another video
                   </button>
