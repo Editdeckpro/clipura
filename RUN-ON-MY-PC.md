@@ -6,18 +6,17 @@ setup files are kept, so you can switch to always-on hosting later with one chan
 
 ## One-time setup
 
-1. In `backend\.env`, make sure you have these lines (your API keys are already there):
+1. In `backend\.env`, add these two lines (your API keys are already there):
 
    ```
    ACCESS_CODE=pick-any-code          # the code you give testers
    DAILY_PROCESSING_MINUTES=180       # safety cap on minutes/day
-   FRONTEND_URL=http://localhost:3000,https://YOUR-SITE.vercel.app
    ```
 
-   Put BOTH addresses in `FRONTEND_URL`, comma-separated (local for you, the Vercel
-   site for testers). Replace `YOUR-SITE.vercel.app` with your real Vercel address.
+   (You do NOT need to set FRONTEND_URL — any `*.vercel.app` site is allowed
+   automatically, and processing is still protected by the access code.)
 
-2. Deploy the website on Vercel (see "Vercel steps" below).
+2. Deploy the website on Vercel (see the Vercel steps your assistant gave you).
 
 ## Each time you want the demo online
 

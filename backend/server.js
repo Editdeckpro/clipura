@@ -29,6 +29,9 @@ app.use(cors({
   origin: (origin, cb) => {
     // Allow requests with no origin (curl, Postman, same-origin SSR)
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    // Allow any Vercel deployment of this site (the demo frontend lives there,
+    // and its subdomain can change). Processing is still gated by the access code.
+    try { if (new URL(origin).hostname.endsWith('.vercel.app')) return cb(null, true); } catch (_) {}
     cb(new Error(`CORS: origin ${origin} not allowed`));
   },
   credentials: true,
