@@ -146,7 +146,7 @@ export default function UploadZone({ onJobCreated }: Props) {
               type="url"
               value={youtubeUrl}
               onChange={e => setYoutubeUrl(e.target.value)}
-              placeholder="Paste a YouTube link (video or live stream)"
+              placeholder="Paste a YouTube, Twitch, or Kick link (video or live stream)"
               disabled={uploading}
               className="w-full pl-12 pr-4 py-4 bg-surface-1 border border-white/10 rounded-xl text-white placeholder-white/25 focus:border-brand-500 focus:outline-none transition-colors text-sm"
             />

@@ -53,15 +53,29 @@ router.post('/file', upload.single('file'), async (req, res) => {
   processJob(job.id, req.file.path);
 });
 
+// Links we accept: YouTube, Twitch, and Kick (finished videos and live streams).
+function isSupportedLink(url) {
+  try {
+    const u = new URL(String(url).startsWith('http') ? url : `https://${url}`);
+    const host = u.hostname.replace(/^www\./, '').toLowerCase();
+    return (
+      host === 'youtube.com' || host.endsWith('.youtube.com') || host === 'youtu.be' ||
+      host === 'twitch.tv' || host.endsWith('.twitch.tv') ||
+      host === 'kick.com' || host.endsWith('.kick.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
 // POST /api/upload/youtube
 // Body: { url, liveMinutes } - liveMinutes is only used when the link is live right now.
 router.post('/youtube', async (req, res) => {
   const { url, liveMinutes } = req.body;
-  if (!url) return res.status(400).json({ error: 'YouTube link required' });
+  if (!url) return res.status(400).json({ error: 'A video link is required' });
 
-  const youtubeRegex = /^(https?:\/\/)?(www\.|m\.)?(youtube\.com|youtu\.be)\/.+/;
-  if (!youtubeRegex.test(url)) {
-    return res.status(400).json({ error: 'That does not look like a YouTube link' });
+  if (!isSupportedLink(url)) {
+    return res.status(400).json({ error: 'Paste a YouTube, Twitch, or Kick link.' });
   }
 
   const minutes = Number(liveMinutes);

@@ -16,20 +16,20 @@ type Stage = 'upload' | 'processing' | 'select' | 'generate';
 type View = 'workflow' | 'library';
 
 const HOW_IT_WORKS = [
-  { icon: Link2, title: 'Paste a link or upload', desc: 'A YouTube video, a stream that is live right now, or a file from your computer.' },
+  { icon: Link2, title: 'Paste a link or upload', desc: 'A YouTube, Twitch, or Kick link, a stream that is live right now, or a file from your computer.' },
   { icon: Sparkles, title: 'We find the moments', desc: 'Every moment gets a score, so the strongest clips are at the top.' },
   { icon: Download, title: 'Review and download', desc: 'Adjust the cut if you want, then download clips ready to post.' },
 ];
 
 const FEATURES = [
-  { icon: Radio, title: 'Clip streams while they are live', desc: 'Paste a live YouTube link and get clips from the last 10 minutes. Post while everyone is still watching.' },
+  { icon: Radio, title: 'Clip streams while they are live', desc: 'Paste a live YouTube, Twitch, or Kick link and get clips from the last 10 minutes. Post while everyone is still watching.' },
   { icon: Sparkles, title: 'Scored moments', desc: 'Funny lines, big reactions, bold takes. Each one is scored from 0 to 100 so you know what to post first.' },
   { icon: Smartphone, title: 'Vertical and captioned', desc: 'Every clip comes out in 9:16 with captions, sized for TikTok, Reels, and Shorts.' },
   { icon: SlidersHorizontal, title: 'You stay in control', desc: 'Move the start and end, edit the hook, and save the clips you want to keep.' },
 ];
 
 const FAQ = [
-  { q: 'What can I clip?', a: 'YouTube videos, YouTube streams that are live right now, and files you upload (MP4, MOV, MKV, WEBM, MP3, WAV and more).' },
+  { q: 'What can I clip?', a: 'YouTube, Twitch, and Kick links (finished videos and streams that are live right now), and files you upload (MP4, MOV, MKV, WEBM, MP3, WAV and more).' },
   { q: 'How does live clipping work?', a: 'Paste the link to a stream while it is live. Clip Factory grabs the last 10 minutes and finds the best moments in it.' },
   { q: 'How does it pick the moments?', a: 'It reads what is being said and scores each moment for how shareable it is. Videos with someone talking give the best results.' },
   { q: 'How long does it take?', a: 'Most videos are ready to review in a few minutes. Longer videos take longer.' },
