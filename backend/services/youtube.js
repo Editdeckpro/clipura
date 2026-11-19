@@ -9,12 +9,17 @@ const BIN_DIR = path.join(__dirname, '..', 'bin');
 const BINARY = path.join(BIN_DIR, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
 // ---- Settings you can tweak -------------------------------------------------
-// When a link is a stream that is live right now, grab this many minutes
-// counting back from the present. YouTube keeps about 60 minutes available.
+// When a link is a stream that is live right now, grab this many minutes.
+// YouTube can serve the last ~60 minutes; Twitch and Kick cannot reliably go
+// back, so for those we record the next N minutes forward instead.
 const LIVE_MINUTES = 10;
 const LIVE_MAX_MINUTES = 60;
-// Picture quality used for live streams. 720 is a good balance of speed and quality.
+// Picture quality cap for live streams. 720 is a good balance of speed/quality.
+// The selector caps combined (single video+audio) formats too, not just split
+// ones, so a platform that only serves a 1080p combined stream is still capped.
 const LIVE_MAX_HEIGHT = 720;
+const LIVE_FORMAT =
+  `bv*[height<=${LIVE_MAX_HEIGHT}]+ba/b[height<=${LIVE_MAX_HEIGHT}]/b`;
 // -----------------------------------------------------------------------------
 
 // Newer yt-dlp versions need a JavaScript engine to read YouTube. Node is already installed.
@@ -43,17 +48,44 @@ async function downloadYouTube(url, outputPath, options = {}) {
   const yt = await getClient();
   const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
   const onStatus = typeof options.onStatus === 'function' ? options.onStatus : () => {};
+  const platform = detectPlatform(url);
 
   const live = await checkLive(yt, url);
   if (live.isLive) {
     const minutes = clampMinutes(options.liveMinutes || LIVE_MINUTES);
-    console.log(`[youtube] Live stream detected - grabbing the last ${minutes} minutes`);
-    onStatus(`Grabbing the last ${minutes} minutes of the live stream`);
-    return downloadLive(yt, url, outputPath, minutes, live.segmentSeconds, onProgress);
+
+    // Only YouTube reliably keeps past footage of a live stream available, so
+    // only YouTube can "go back". Twitch and Kick drop old pieces quickly, so
+    // for those we honestly record the next N minutes forward from now.
+    const canGoBack = platform === 'youtube';
+    console.log(`[youtube] Live ${platform} stream - ${canGoBack ? `grabbing the last ${minutes}` : `recording the next ${minutes}`} minutes`);
+    onStatus(canGoBack
+      ? `Grabbing the last ${minutes} minutes of the live stream`
+      : `Recording the next ${minutes} minutes of the live stream`);
+
+    return downloadLive(yt, url, outputPath, {
+      minutes,
+      segmentSeconds: live.segmentSeconds,
+      onProgress,
+      onStatus,
+      canGoBack,
+    });
   }
 
   onStatus('Downloading the video');
   return downloadFinished(yt, url, outputPath, onProgress);
+}
+
+// Which platform a link belongs to, from its hostname.
+function detectPlatform(url) {
+  try {
+    const host = new URL(String(url).startsWith('http') ? url : `https://${url}`)
+      .hostname.replace(/^www\./, '').toLowerCase();
+    if (host === 'youtu.be' || host === 'youtube.com' || host.endsWith('.youtube.com')) return 'youtube';
+    if (host === 'twitch.tv' || host.endsWith('.twitch.tv')) return 'twitch';
+    if (host === 'kick.com' || host.endsWith('.kick.com')) return 'kick';
+  } catch (_) {}
+  return 'other';
 }
 
 // ---- Live streams -----------------------------------------------------------
@@ -64,7 +96,7 @@ async function checkLive(yt, url) {
     const out = await yt.execPromise([
       url,
       ...JS_RUNTIME_ARGS,
-      '--format', `bv*[height<=${LIVE_MAX_HEIGHT}]/b`,
+      '--format', LIVE_FORMAT,
       '--print', 'live_status',
       '--print', 'urls',
       '--no-playlist',
@@ -98,22 +130,26 @@ async function readSegmentSeconds(playlistUrl) {
   }
 }
 
-async function downloadLive(yt, url, outputPath, minutes, segmentSeconds = 5, onProgress = () => {}) {
+async function downloadLive(yt, url, outputPath, opts) {
+  const { minutes, segmentSeconds = 5, onProgress = () => {}, onStatus = () => {}, canGoBack } = opts;
   const seconds = minutes * 60;
-  const segmentsBack = Math.ceil(seconds / segmentSeconds) + 2;
 
   const dir = path.dirname(outputPath);
   const base = path.basename(outputPath, path.extname(outputPath));
-  const rawPath = path.join(dir, `${base}.live.mp4`);
+  // Record into an MPEG-TS file: it is the natural container for live HLS and
+  // stream-copies cleanly to MP4 afterwards.
+  const rawPath = path.join(dir, `${base}.live.ts`);
 
   const args = [
     url,
     ...JS_RUNTIME_ARGS,
-    '--format', `bv*[height<=${LIVE_MAX_HEIGHT}]+ba/b`,
+    '--format', LIVE_FORMAT,
     '--downloader', 'ffmpeg',
-    // Start this many pieces back from the present...
-    '--downloader-args', `ffmpeg_i:-live_start_index -${segmentsBack}`,
-    // ...and stop once we have the minutes we asked for.
+    // Never let yt-dlp run its own post-processing fixup. On some platforms it
+    // fails after a clean recording and throws the finished file away. We
+    // repackage the recording ourselves below instead.
+    '--fixup', 'never',
+    // Stop once we have the minutes we asked for.
     '--downloader-args', `ffmpeg_o:-t ${seconds}`,
     '--output', rawPath,
     '--no-part',
@@ -121,46 +157,94 @@ async function downloadLive(yt, url, outputPath, minutes, segmentSeconds = 5, on
     '--no-warnings',
   ];
 
-  // The ffmpeg downloader does not report a percentage, so track real progress by
-  // watching the recording file grow. We compare against a rough expected size
-  // (about 12 MB per minute at 720p) and never let it reach 100% until it is done.
-  const expectedBytes = minutes * 12 * 1024 * 1024;
-  const poll = setInterval(() => {
-    try {
-      const bytes = fs.statSync(rawPath).size;
-      onProgress(Math.min(0.95, bytes / expectedBytes));
-    } catch (_) { /* file not created yet */ }
-  }, 600);
+  // YouTube: step back from the present to capture the last N minutes.
+  if (canGoBack) {
+    const segmentsBack = Math.ceil(seconds / segmentSeconds) + 2;
+    args.push('--downloader-args', `ffmpeg_i:-live_start_index -${segmentsBack}`);
+  }
 
+  const poll = canGoBack
+    // Going back fills fast (faster than real time), so track the file growing.
+    ? (() => {
+        const expectedBytes = minutes * 12 * 1024 * 1024;
+        return setInterval(() => {
+          try { onProgress(Math.min(0.95, fs.statSync(rawPath).size / expectedBytes)); } catch (_) {}
+        }, 600);
+      })()
+    // Recording forward happens in real time, so progress is just elapsed time,
+    // and we can show how long is left.
+    : (() => {
+        const startedAt = Date.now();
+        return setInterval(() => {
+          const elapsed = (Date.now() - startedAt) / 1000;
+          onProgress(Math.min(0.95, elapsed / seconds));
+          onStatus(`Recording the live stream... about ${formatRemaining(seconds - elapsed)} left`);
+        }, 1000);
+      })();
+
+  // Keep any recording even if yt-dlp exits non-zero (e.g. a late post-step):
+  // we only fail if there is genuinely no usable file on disk.
+  let runError = null;
   try {
     await run(yt, args);
-    if (!fs.existsSync(rawPath)) throw new Error('Live download finished but no file was written');
+  } catch (err) {
+    runError = err;
+  }
+  clearInterval(poll);
 
-    clearInterval(poll);
+  try {
+    const haveFile = fs.existsSync(rawPath) && fs.statSync(rawPath).size > 64 * 1024;
+    if (!haveFile) {
+      throw new Error(runError ? runError.message : 'The live recording produced no file');
+    }
     onProgress(0.97);
-
-    // The raw live recording is in a streaming format whose clock starts hours in.
-    // Repackage it (no re-encoding, takes seconds) so it behaves like a normal MP4.
-    await repackage(rawPath, outputPath);
+    onStatus('Getting the recording ready');
+    await robustRepackage(rawPath, outputPath);
     onProgress(1);
     return outputPath;
-  } catch (err) {
-    throw new Error(`Live stream download failed: ${err.message}`);
   } finally {
-    clearInterval(poll);
     fs.unlink(rawPath, () => {});
   }
 }
 
-function repackage(inputPath, outputPath) {
+// Turn the raw live recording into a normal MP4, trying the cheapest, safest
+// path first and degrading gracefully so a finished recording is never lost:
+//   1. straight stream copy to MP4 (fast, no re-encode)
+//   2. copy video, re-encode only the audio (handles odd audio framing)
+//   3. last resort: use the raw recording as-is (ffmpeg can still read it)
+async function robustRepackage(inputPath, outputPath) {
+  try {
+    await ffmpegRun(inputPath, outputPath, ['-c copy', '-movflags +faststart']);
+    return;
+  } catch (err) {
+    console.error('[live] stream copy failed, re-encoding audio:', err.message);
+  }
+  try {
+    await ffmpegRun(inputPath, outputPath, ['-c:v copy', '-c:a aac', '-b:a 160k', '-movflags +faststart']);
+    return;
+  } catch (err) {
+    console.error('[live] audio re-encode failed, using raw recording as-is:', err.message);
+  }
+  fs.copyFileSync(inputPath, outputPath);
+}
+
+function ffmpegRun(inputPath, outputPath, outputOptions) {
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
-      .outputOptions(['-c copy', '-movflags +faststart'])
+      .outputOptions(outputOptions)
       .output(outputPath)
-      .on('end', () => resolve(outputPath))
-      .on('error', err => reject(new Error(`Could not repackage live recording: ${err.message}`)))
+      .on('end', () => resolve())
+      .on('error', err => reject(err))
       .run();
   });
+}
+
+// "4m 30s" / "45s" - a short, friendly countdown for the status message.
+function formatRemaining(secondsLeft) {
+  const s = Math.max(0, Math.round(secondsLeft));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return m > 0 ? `${m}m ${rem}s` : `${rem}s`;
 }
 
 function clampMinutes(value) {

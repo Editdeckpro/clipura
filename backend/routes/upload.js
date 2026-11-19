@@ -85,9 +85,12 @@ router.post('/youtube', async (req, res) => {
 });
 
 async function processYouTubeJob(jobId, url, liveMinutes) {
+  const outputPath = path.join(__dirname, '../uploads', `${jobId}.mp4`);
+
+  // Step 1: get the video/stream. If this fails, show a short plain message and
+  // keep the full technical log in the server console only.
   try {
     updateJob(jobId, { status: JOB_STATUS.DOWNLOADING, progress: 5, statusMessage: 'Checking the link...' });
-    const outputPath = path.join(__dirname, '../uploads', `${jobId}.mp4`);
 
     // Map download progress (0..1) into the 5-18% band of the whole job, and keep
     // it moving forward only so the bar never jumps backwards between stages.
@@ -103,13 +106,18 @@ async function processYouTubeJob(jobId, url, liveMinutes) {
         }
       },
     });
-
-    updateJob(jobId, { inputFile: outputPath, progress: 20, statusMessage: 'Video ready' });
-    await processJob(jobId, outputPath);
   } catch (err) {
-    console.error('YouTube job error:', err);
-    updateJob(jobId, { status: JOB_STATUS.ERROR, error: err.message });
+    console.error('[youtube] stream/video download failed:', err);
+    updateJob(jobId, {
+      status: JOB_STATUS.ERROR,
+      error: "We couldn't get that stream. Try again, or try a finished video.",
+    });
+    return;
   }
+
+  // Step 2: transcribe + pick moments (these set their own friendly messages).
+  updateJob(jobId, { inputFile: outputPath, progress: 20, statusMessage: 'Video ready' });
+  await processJob(jobId, outputPath);
 }
 
 async function processJob(jobId, filePath) {
