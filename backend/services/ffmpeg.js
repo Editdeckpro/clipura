@@ -39,21 +39,21 @@ async function generateClip({ inputFile, outputPath, startTime, endTime, transcr
   }
 
   const hasSubs = fs.existsSync(srtPath);
+  const hasAudio = await probeHasAudio(inputFile);
 
   return new Promise((resolve, reject) => {
     const cmd = ffmpeg(inputFile)
       .setStartTime(start)
       .setDuration(duration)
       .outputOptions([
-        '-filter_complex', buildFilterGraph(hasSubs, srtPath),
+        '-filter_complex', buildFilterGraph(hasSubs, srtPath, hasAudio),
         '-map', '[v]',
-        '-map', '0:a?',
+        ...(hasAudio ? ['-map', '[a]'] : []),
         '-c:v libx264',
         '-preset veryfast',
         '-crf 22',
         '-pix_fmt yuv420p',
-        '-c:a aac',
-        '-b:a 160k',
+        ...(hasAudio ? ['-c:a aac', '-b:a 160k'] : ['-an']),
         '-movflags +faststart',
         '-r 30',
       ])
@@ -72,9 +72,21 @@ async function generateClip({ inputFile, outputPath, startTime, endTime, transcr
   });
 }
 
+// True if the input has at least one audio stream.
+function probeHasAudio(inputFile) {
+  return new Promise(resolve => {
+    ffmpeg.ffprobe(inputFile, (err, data) => {
+      if (err || !data) return resolve(false);
+      resolve((data.streams || []).some(s => s.codec_type === 'audio'));
+    });
+  });
+}
+
 // Builds the 9:16 picture: a blurred, darkened copy of the video fills the
 // whole frame, and the real video sits on top, enlarged, in the middle.
-function buildFilterGraph(hasSubs, srtPath) {
+// When the video has sound, loudnorm evens the volume to a consistent level
+// so every clip plays back at a similar loudness.
+function buildFilterGraph(hasSubs, srtPath, hasAudio) {
   // The background is blurred at a small size and then enlarged, which is much
   // faster than blurring at full size and looks the same.
   const background =
@@ -98,7 +110,15 @@ function buildFilterGraph(hasSubs, srtPath) {
     combined += `,subtitles='${escapedSrt}':force_style='${style}'`;
   }
 
-  return `${background};${foreground};${combined}[v]`;
+  let graph = `${background};${foreground};${combined}[v]`;
+
+  // Normalise loudness to about -14 LUFS (a common target for social video) so
+  // clips are not wildly louder or quieter than one another.
+  if (hasAudio) {
+    graph += ';[0:a]loudnorm=I=-14:TP=-1.5:LRA=11[a]';
+  }
+
+  return graph;
 }
 
 function generateSRT(words, clipStart, clipEnd, outputPath) {
