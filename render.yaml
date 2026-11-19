@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: clip-factory-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter          # $7/month — upgrade to standard for production load
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: OPENAI_API_KEY
+        sync: false        # set manually in Render dashboard — never commit keys
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false        # set to your Vercel URL after frontend deploys
+    disk:
+      name: clip-factory-data
+      mountPath: /app
+      sizeGB: 10           # $2.50/month — persists uploads, outputs, yt-dlp binary

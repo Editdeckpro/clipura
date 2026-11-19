@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(winget install *)",
+      "Bash(npm install *)",
+      "Bash(notepad *)",
+      "Bash(npm run *)"
+    ]
+  }
+}
