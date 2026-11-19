@@ -72,9 +72,24 @@ router.post('/youtube', async (req, res) => {
 
 async function processYouTubeJob(jobId, url, liveMinutes) {
   try {
-    updateJob(jobId, { status: JOB_STATUS.DOWNLOADING, progress: 5, statusMessage: 'Getting the video...' });
+    updateJob(jobId, { status: JOB_STATUS.DOWNLOADING, progress: 5, statusMessage: 'Checking the link...' });
     const outputPath = path.join(__dirname, '../uploads', `${jobId}.mp4`);
-    await downloadYouTube(url, outputPath, { liveMinutes });
+
+    // Map download progress (0..1) into the 5-18% band of the whole job, and keep
+    // it moving forward only so the bar never jumps backwards between stages.
+    let lastProgress = 5;
+    await downloadYouTube(url, outputPath, {
+      liveMinutes,
+      onStatus: message => updateJob(jobId, { statusMessage: message }),
+      onProgress: fraction => {
+        const pct = 5 + Math.round(Math.min(1, Math.max(0, fraction)) * 13);
+        if (pct > lastProgress) {
+          lastProgress = pct;
+          updateJob(jobId, { progress: pct });
+        }
+      },
+    });
+
     updateJob(jobId, { inputFile: outputPath, progress: 20, statusMessage: 'Video ready' });
     await processJob(jobId, outputPath);
   } catch (err) {

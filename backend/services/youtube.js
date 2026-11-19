@@ -41,15 +41,19 @@ async function getClient() {
  */
 async function downloadYouTube(url, outputPath, options = {}) {
   const yt = await getClient();
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
+  const onStatus = typeof options.onStatus === 'function' ? options.onStatus : () => {};
 
   const live = await checkLive(yt, url);
   if (live.isLive) {
     const minutes = clampMinutes(options.liveMinutes || LIVE_MINUTES);
     console.log(`[youtube] Live stream detected - grabbing the last ${minutes} minutes`);
-    return downloadLive(yt, url, outputPath, minutes, live.segmentSeconds);
+    onStatus(`Grabbing the last ${minutes} minutes of the live stream`);
+    return downloadLive(yt, url, outputPath, minutes, live.segmentSeconds, onProgress);
   }
 
-  return downloadFinished(yt, url, outputPath);
+  onStatus('Downloading the video');
+  return downloadFinished(yt, url, outputPath, onProgress);
 }
 
 // ---- Live streams -----------------------------------------------------------
@@ -94,7 +98,7 @@ async function readSegmentSeconds(playlistUrl) {
   }
 }
 
-async function downloadLive(yt, url, outputPath, minutes, segmentSeconds = 5) {
+async function downloadLive(yt, url, outputPath, minutes, segmentSeconds = 5, onProgress = () => {}) {
   const seconds = minutes * 60;
   const segmentsBack = Math.ceil(seconds / segmentSeconds) + 2;
 
@@ -117,17 +121,33 @@ async function downloadLive(yt, url, outputPath, minutes, segmentSeconds = 5) {
     '--no-warnings',
   ];
 
+  // The ffmpeg downloader does not report a percentage, so track real progress by
+  // watching the recording file grow. We compare against a rough expected size
+  // (about 12 MB per minute at 720p) and never let it reach 100% until it is done.
+  const expectedBytes = minutes * 12 * 1024 * 1024;
+  const poll = setInterval(() => {
+    try {
+      const bytes = fs.statSync(rawPath).size;
+      onProgress(Math.min(0.95, bytes / expectedBytes));
+    } catch (_) { /* file not created yet */ }
+  }, 600);
+
   try {
     await run(yt, args);
     if (!fs.existsSync(rawPath)) throw new Error('Live download finished but no file was written');
 
+    clearInterval(poll);
+    onProgress(0.97);
+
     // The raw live recording is in a streaming format whose clock starts hours in.
     // Repackage it (no re-encoding, takes seconds) so it behaves like a normal MP4.
     await repackage(rawPath, outputPath);
+    onProgress(1);
     return outputPath;
   } catch (err) {
     throw new Error(`Live stream download failed: ${err.message}`);
   } finally {
+    clearInterval(poll);
     fs.unlink(rawPath, () => {});
   }
 }
@@ -152,7 +172,7 @@ function clampMinutes(value) {
 // ---- Finished videos --------------------------------------------------------
 
 // Tries progressively simpler format selectors so it never dead-ends.
-async function downloadFinished(yt, url, outputPath) {
+async function downloadFinished(yt, url, outputPath, onProgress = () => {}) {
   // yt-dlp uses %(ext)s in output templates; we want a fixed path.
   // Use a temp template then rename to the exact outputPath.
   const dir = path.dirname(outputPath);
@@ -179,7 +199,7 @@ async function downloadFinished(yt, url, outputPath) {
     ];
 
     try {
-      await run(yt, args);
+      await run(yt, args, onProgress);
 
       // Locate the file yt-dlp wrote (extension may vary)
       const written = fs.readdirSync(dir).find(f => f.startsWith(base + '.'));
@@ -188,6 +208,7 @@ async function downloadFinished(yt, url, outputPath) {
       const writtenPath = path.join(dir, written);
       if (writtenPath !== outputPath) fs.renameSync(writtenPath, outputPath);
 
+      onProgress(1);
       return outputPath;
     } catch (err) {
       lastError = err;
@@ -202,11 +223,16 @@ async function downloadFinished(yt, url, outputPath) {
   throw new Error(`YouTube download failed: ${lastError?.message}`);
 }
 
-function run(yt, args) {
+function run(yt, args, onProgress = () => {}) {
   return new Promise((resolve, reject) => {
     const proc = yt.exec(args);
     const stderr = [];
 
+    // yt-dlp reports a real download percentage for finished videos.
+    proc.on('progress', p => {
+      const pct = Number(p && p.percent);
+      if (Number.isFinite(pct)) onProgress(Math.min(1, Math.max(0, pct / 100)));
+    });
     proc.on('ytDlpEvent', (type, data) => {
       if (type === 'error') stderr.push(data);
     });
