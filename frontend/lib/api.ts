@@ -147,7 +147,7 @@ export interface Clip {
 
 export interface Job {
   id: string;
-  status: 'queued' | 'downloading' | 'transcribing' | 'analyzing' | 'ready' | 'generating' | 'complete' | 'error';
+  status: 'queued' | 'downloading' | 'transcribing' | 'analyzing' | 'ready' | 'generating' | 'complete' | 'error' | 'interrupted';
   progress: number;
   statusMessage: string;
   createdAt: string;

@@ -50,7 +50,7 @@ export default function ProcessingStatus({ jobId, onReady, onError }: Props) {
         source.close();
         onReady(data);
       }
-      if (data.status === 'error') {
+      if (data.status === 'error' || data.status === 'interrupted') {
         source.close();
         onError(data.error || 'Processing failed');
       }
@@ -73,7 +73,7 @@ export default function ProcessingStatus({ jobId, onReady, onError }: Props) {
             clearInterval(pollInterval);
             onReady(data);
           }
-          if (data.status === 'error') {
+          if (data.status === 'error' || data.status === 'interrupted') {
             clearInterval(pollInterval);
             onError(data.error || 'Processing failed');
           }

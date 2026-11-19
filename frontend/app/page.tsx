@@ -451,6 +451,7 @@ export default function Home() {
                   overrides={momentOverrides}
                   layout={layoutOptions}
                   onGeneratingChange={setClipsGenerating}
+                  onRestart={reset}
                 />
                 <div className="mt-8 flex flex-col items-center gap-3">
                   {/* Only offer going back once the clips have finished (or failed). */}

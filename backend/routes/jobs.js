@@ -35,7 +35,12 @@ router.get('/:id/stream', (req, res) => {
     const safe = { ...current };
     delete safe.inputFile;
     res.write(`data: ${JSON.stringify(safe)}\n\n`);
-    if (current.status === JOB_STATUS.COMPLETE || current.status === JOB_STATUS.ERROR || current.status === JOB_STATUS.READY) {
+    if (
+      current.status === JOB_STATUS.COMPLETE ||
+      current.status === JOB_STATUS.ERROR ||
+      current.status === JOB_STATUS.READY ||
+      current.status === JOB_STATUS.INTERRUPTED
+    ) {
       clearInterval(interval);
       res.end();
     }

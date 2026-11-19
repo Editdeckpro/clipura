@@ -5,7 +5,9 @@ backend/uploads/
 backend/outputs/
 backend/temp/
 backend/bin/
+backend/data/
 frontend/.next/
+*.tsbuildinfo
 *.log
 .DS_Store
 Thumbs.db

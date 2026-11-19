@@ -17,9 +17,10 @@ interface Props {
   overrides?: Record<string, MomentOverride>;
   layout?: LayoutOptions;
   onGeneratingChange?: (generating: boolean) => void;
+  onRestart?: () => void;
 }
 
-export default function ClipGenerator({ job, selectedMoments, overrides, layout, onGeneratingChange }: Props) {
+export default function ClipGenerator({ job, selectedMoments, overrides, layout, onGeneratingChange, onRestart }: Props) {
   const [generating, setGenerating] = useState(true);
   const [hasProgress, setHasProgress] = useState(false);
   const [currentJob, setCurrentJob] = useState<Job>(job);
@@ -70,7 +71,7 @@ export default function ClipGenerator({ job, selectedMoments, overrides, layout,
         if (updated.status === 'ready') return; // generation has not been picked up yet
         setCurrentJob(updated);
         setHasProgress(true);
-        if (updated.status === 'complete' || updated.status === 'error') {
+        if (updated.status === 'complete' || updated.status === 'error' || updated.status === 'interrupted') {
           setGenerating(false);
         }
       } catch {}
@@ -118,6 +119,25 @@ export default function ClipGenerator({ job, selectedMoments, overrides, layout,
           <RotateCcw size={15} />
           Try again
         </button>
+      </div>
+    );
+  }
+
+  if (currentJob.status === 'interrupted') {
+    return (
+      <div className="text-center py-10">
+        <RotateCcw size={48} className="text-white/40 mx-auto mb-4" />
+        <h2 className="text-xl font-bold text-white mb-2">This was interrupted</h2>
+        <p className="text-white/50 text-sm mb-6">Start it again.</p>
+        {onRestart && (
+          <button
+            onClick={onRestart}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-brand-500 hover:bg-brand-400 text-white font-bold rounded-xl transition-colors text-sm"
+          >
+            <RotateCcw size={15} />
+            Start again
+          </button>
+        )}
       </div>
     );
   }
